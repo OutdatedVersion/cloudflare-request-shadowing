@@ -4,7 +4,7 @@ import {
   type LoaderArgs,
   type V2_MetaFunction,
 } from '@remix-run/cloudflare';
-import { useLoaderData } from '@remix-run/react';
+import { useLoaderData, useRevalidator } from '@remix-run/react';
 import {
   Card,
   Grid,
@@ -20,6 +20,7 @@ import {
 } from '@tremor/react';
 import formatDistanceToNow from 'date-fns/formatDistanceToNow';
 import parseISO from 'date-fns/parseISO';
+import { useEffect } from 'react';
 
 export const meta: V2_MetaFunction = () => {
   return [
@@ -92,6 +93,17 @@ const chartdata = [
 
 export default function Index() {
   const requests = useLoaderData<typeof loader>();
+  const revalidator = useRevalidator();
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        revalidator.revalidate();
+      }
+    }, 5_000);
+
+    return () => clearInterval(interval);
+  });
 
   return (
     <div className="py-8 mx-4 md:mx-8">
