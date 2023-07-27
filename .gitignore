@@ -6,3 +6,4 @@ web/.cache/
 web/functions/\[\[path\]\].js
 web/functions/\[\[path\]\].js.map
 web/public/build/
+web/.dev.vars

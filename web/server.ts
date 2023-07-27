@@ -6,7 +6,7 @@ if (process.env.NODE_ENV === 'development') {
   logDevReady(build);
 }
 
-export const onRequest = createPagesFunctionHandler({
+export const onRequest = createPagesFunctionHandler<{ DATABASE_URL: string }>({
   build,
   getLoadContext: (context) => ({ env: context.env }),
   mode: process.env.NODE_ENV,

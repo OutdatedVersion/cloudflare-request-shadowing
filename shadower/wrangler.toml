@@ -1,7 +1,6 @@
 name = "request-shadowing"
 main = "src/worker.ts"
 compatibility_date = "2023-07-24"
-node_compat = true
 
 [[kv_namespaces]]
 binding = "kv"

@@ -1,4 +1,10 @@
-import type { V2_MetaFunction } from '@remix-run/cloudflare';
+import { neon } from '@neondatabase/serverless';
+import {
+  json,
+  type LoaderArgs,
+  type V2_MetaFunction,
+} from '@remix-run/cloudflare';
+import { useLoaderData } from '@remix-run/react';
 import {
   Card,
   Grid,
@@ -22,38 +28,29 @@ export const meta: V2_MetaFunction = () => {
   ];
 };
 
-const data = [
-  {
-    id: 'e3bd6db4-b072-4cfd-b60e-2cd50569f5b5',
-    created_at: '2023-07-27T04:41:03.892Z',
-    control: {
-      url: 'https://bwatkins.dev/jaja/one/',
-    },
-    shadow: {
-      url: 'https://bwatkins.dev/jaja/two/',
-    },
-    diff: {
-      added: 5,
-      removed: 2,
-      kept: 4,
-    },
-  },
-  {
-    id: '5ac1b88d-db20-426c-b1a1-9a4a80a21eef',
-    created_at: '2023-07-27T04:41:03.892Z',
-    control: {
-      url: 'https://bwatkins.dev/jaja/one/',
-    },
-    shadow: {
-      url: 'https://bwatkins.dev/jaja/two/',
-    },
-    diff: {
-      added: 33,
-      removed: 1,
-      kept: 12,
-    },
-  },
-];
+interface Stored {
+  url: string;
+  status: number;
+  duration: number;
+  response: string;
+}
+
+interface A {
+  id: string;
+  created_at: string;
+  control: Stored;
+  shadows: Stored[];
+}
+
+export const loader = async ({ context }: LoaderArgs) => {
+  const query = neon(context.env.DATABASE_URL as string);
+
+  const result = (await query(
+    'SELECT * FROM requests ORDER BY created_at DESC LIMIT 25;',
+  )) as A[];
+
+  return json(result, 200);
+};
 
 const chartdata = [
   {
@@ -94,6 +91,8 @@ const chartdata = [
 ];
 
 export default function Index() {
+  const requests = useLoaderData<typeof loader>();
+
   return (
     <div className="py-8 mx-4 md:mx-8">
       <Grid numItems={1} numItemsSm={2} numItemsLg={3} className="gap-2">
@@ -122,28 +121,22 @@ export default function Index() {
           </TableRow>
         </TableHead>
         <TableBody>
-          {data.map((d) => (
+          {requests.map((req) => (
             <TableRow
-              key={d.id}
+              key={req.id}
               className="transition-colors duration-100 hover:bg-gray-200"
             >
               <TableCell>
-                {formatDistanceToNow(parseISO(d.created_at), {
+                {formatDistanceToNow(parseISO(req.created_at), {
                   addSuffix: true,
                 }).replace('about', '')}
               </TableCell>
-              <TableCell>{new URL(d.control.url).pathname}</TableCell>
-              <TableCell>{new URL(d.shadow.url).pathname}</TableCell>
+              <TableCell>{new URL(req.control.url).pathname}</TableCell>
+              <TableCell>{new URL(req.shadows[0].url).pathname}</TableCell>
               <TableCell>
-                <span className="font-medium text-green-600">
-                  +{d.diff.added}
-                </span>
-                <span className="px-1 font-medium text-neutral-500">
-                  {d.diff.kept}
-                </span>
-                <span className="font-medium text-red-600">
-                  -{d.diff.removed}
-                </span>
+                <span className="font-medium text-green-600">+0</span>
+                <span className="px-1 font-medium text-neutral-500">0</span>
+                <span className="font-medium text-red-600">-0</span>
               </TableCell>
             </TableRow>
           ))}
