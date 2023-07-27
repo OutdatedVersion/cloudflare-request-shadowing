@@ -55,38 +55,38 @@ export const loader = async ({ context }: LoaderArgs) => {
 const chartdata = [
   {
     date: '11:00am',
-    Total: 230,
+    Total: 0,
     Divergent: 0,
   },
   {
     date: '12:00pm',
-    Total: 200,
-    Divergent: 2,
+    Total: 0,
+    Divergent: 0,
   },
   {
     date: '1:00pm',
-    Total: 230,
-    Divergent: 5,
+    Total: 0,
+    Divergent: 0,
   },
   {
     date: '2:00pm',
-    Total: 340,
-    Divergent: 280,
+    Total: 0,
+    Divergent: 0,
   },
   {
     date: '3:00pm',
-    Total: 400,
-    Divergent: 290,
+    Total: 0,
+    Divergent: 0,
   },
   {
     date: '4:00pm',
-    Total: 480,
-    Divergent: 23,
+    Total: 0,
+    Divergent: 0,
   },
   {
     date: '5:00pm',
-    Total: 430,
-    Divergent: 30,
+    Total: 0,
+    Divergent: 0,
   },
 ];
 
