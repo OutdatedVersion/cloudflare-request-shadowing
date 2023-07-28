@@ -57,6 +57,7 @@ interface A {
 export const loader = async ({ context }: LoaderArgs) => {
   const query = neon(context.env.DATABASE_URL as string);
 
+  const totalsQueryStart = Date.now();
   const incompleteTotals = (await query(
     `SELECT 
       count(divergent)::int AS total,
@@ -75,6 +76,7 @@ export const loader = async ({ context }: LoaderArgs) => {
      ORDER BY
       bin DESC;`,
   )) as Array<{ total: number; divergent: number; bin: Date }>;
+  const totalsQuery = Date.now() - totalsQueryStart;
 
   const totals = Array(4 * 2)
     .fill(undefined)
@@ -102,11 +104,20 @@ export const loader = async ({ context }: LoaderArgs) => {
       };
     });
 
+  const divergencesQueryStart = Date.now();
   const divergences = (await query(
     'SELECT * FROM requests WHERE divergent IS TRUE ORDER BY created_at DESC LIMIT 25;',
   )) as A[];
+  const divergencesQuery = Date.now() - divergencesQueryStart;
 
-  return json({ totals, divergences }, 200);
+  return json(
+    { totals, divergences },
+    {
+      headers: {
+        'server-timing': `tq;dur=${totalsQuery},dq;dur=${divergencesQuery}`,
+      },
+    },
+  );
 };
 
 export default function Index() {
