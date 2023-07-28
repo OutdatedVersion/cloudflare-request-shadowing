@@ -47,7 +47,7 @@ export const loader = async ({ context }: LoaderArgs) => {
   const query = neon(context.env.DATABASE_URL as string);
 
   const result = (await query(
-    'SELECT * FROM requests ORDER BY created_at DESC LIMIT 25;',
+    'SELECT * FROM requests WHERE divergent IS TRUE ORDER BY created_at DESC LIMIT 25;',
   )) as A[];
 
   return json(result, 200);
@@ -147,9 +147,15 @@ export default function Index() {
               <TableCell>{new URL(req.control.url).pathname}</TableCell>
               <TableCell>{new URL(req.shadows[0].url).pathname}</TableCell>
               <TableCell>
-                <span className="font-medium text-green-600">+0</span>
-                <span className="px-1 font-medium text-neutral-500">0</span>
-                <span className="font-medium text-red-600">-0</span>
+                <span className="font-medium text-green-600">
+                  +{req.shadows[0].diff.added}
+                </span>
+                <span className="px-1 font-medium text-neutral-500">
+                  {req.shadows[0].diff.kept}
+                </span>
+                <span className="font-medium text-red-600">
+                  -{req.shadows[0].diff.removed}
+                </span>
               </TableCell>
             </TableRow>
           ))}
