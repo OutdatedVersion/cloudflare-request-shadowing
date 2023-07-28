@@ -10,7 +10,8 @@ import formatDistanceToNow from 'date-fns/formatDistanceToNow';
 import parseISO from 'date-fns/parseISO';
 import set from 'date-fns/set';
 import subMinutes from 'date-fns/subMinutes';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { EyeIcon } from '@heroicons/react/24/solid';
 
 export const meta: V2_MetaFunction = () => {
   return [
@@ -108,6 +109,7 @@ export const loader = async ({ context }: LoaderArgs) => {
 
 export default function Index() {
   const { divergences, totals } = useLoaderData<typeof loader>();
+  const [selectedRequest, setSelectedRequest] = useState<A>();
   const revalidator = useRevalidator();
 
   useEffect(() => {
@@ -120,43 +122,87 @@ export default function Index() {
   });
 
   return (
-    <div className="py-8 mx-4 md:mx-8">
-      <div className="overflow-x-auto">
-        <table className="table">
-          <thead>
-            <tr>
-              <th></th>
-              <th>Original request to</th>
-              <th>Shadowed request to</th>
-              <th>Changes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {divergences.map((req) => (
-              <tr key={req.id} className="hover">
-                <td>
-                  {formatDistanceToNow(parseISO(req.created_at), {
-                    addSuffix: true,
-                    includeSeconds: true,
-                  }).replace('about', '')}
-                </td>
-                <td>{new URL(req.control.url).pathname}</td>
-                <td>{new URL(req.shadows[0].url).pathname}</td>
-                <td>
-                  <span className="font-medium text-green-600">
-                    +{req.shadows[0].diff.added}
-                  </span>
-                  <span className="px-1 font-medium text-neutral-500">
-                    {req.shadows[0].diff.kept}
-                  </span>
-                  <span className="font-medium text-red-600">
-                    -{req.shadows[0].diff.removed}
-                  </span>
-                </td>
+    <div className="drawer drawer-end">
+      <input id="main-drawer" type="checkbox" className="drawer-toggle" />
+      <div className="drawer-content py-8 mx-4 md:mx-8">
+        <div className="overflow-x-auto">
+          <table className="table">
+            <thead>
+              <tr>
+                <th></th>
+                <th>Original request to</th>
+                <th>Shadowed request to</th>
+                <th>Changes</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {divergences.map((req) => (
+                <tr key={req.id} className="hover">
+                  <td>
+                    {formatDistanceToNow(parseISO(req.created_at), {
+                      addSuffix: true,
+                      includeSeconds: true,
+                    }).replace('about', '')}
+                  </td>
+                  <td>{new URL(req.control.url).pathname}</td>
+                  <td>{new URL(req.shadows[0].url).pathname}</td>
+                  <td>
+                    <span className="font-medium text-green-600">
+                      +{req.shadows[0].diff.added}
+                    </span>
+                    <span className="px-1 font-medium text-neutral-500">
+                      {req.shadows[0].diff.kept}
+                    </span>
+                    <span className="font-medium text-red-600">
+                      -{req.shadows[0].diff.removed}
+                    </span>
+                    <label htmlFor="main-drawer" className="ml-2 btn btn-xs">
+                      <EyeIcon
+                        className="w-4 h-4"
+                        onClick={() => setSelectedRequest(req)}
+                      />
+                    </label>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div className="drawer-side">
+        <label htmlFor="main-drawer" className="drawer-overlay"></label>
+        <div className="p-4 w-3/5 h-full bg-base-200 text-base-content">
+          {selectedRequest ? (
+            <div>
+              <h1 className="text-lg font-bold">
+                Request to {selectedRequest.control.url}
+              </h1>
+              <p className="text-neutral-400 text-md">
+                {selectedRequest.control.status}{' '}
+                {selectedRequest.control.duration}ms
+              </p>
+
+              <pre className="my-14">
+                <code>
+                  {JSON.stringify(
+                    JSON.parse(selectedRequest.control.response),
+                    null,
+                    2,
+                  )}
+                </code>
+              </pre>
+              <pre>
+                <code>
+                  {JSON.stringify(
+                    JSON.parse(selectedRequest.shadows[0].response),
+                    null,
+                    2,
+                  )}
+                </code>
+              </pre>
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   );
