@@ -22,6 +22,7 @@ import {
 import format from 'date-fns/format';
 import formatDistanceToNow from 'date-fns/formatDistanceToNow';
 import parseISO from 'date-fns/parseISO';
+import set from 'date-fns/set';
 import subHours from 'date-fns/subHours';
 import { useEffect } from 'react';
 
@@ -56,10 +57,10 @@ interface A {
 export const loader = async ({ context }: LoaderArgs) => {
   const query = neon(context.env.DATABASE_URL as string);
 
-  const totals = (await query(
+  const incompleteTotals = (await query(
     `SELECT 
       count(divergent)::int AS total,
-      sum(divergent::int)::int AS divergent_count,
+      sum(divergent::int)::int AS divergent,
       date_bin(
         INTERVAL '1 hour',
         created_at,
@@ -73,35 +74,41 @@ export const loader = async ({ context }: LoaderArgs) => {
       bin
      ORDER BY
       bin DESC;`,
-  )) as Array<{ total: number; divergent_count: number; bin: string }>;
+  )) as Array<{ total: number; divergent: number; bin: Date }>;
+
+  const totals = Array(6)
+    .fill(undefined)
+    .map((_, idx) => {
+      const bin = subHours(
+        set(new Date(), {
+          minutes: 0,
+          seconds: 0,
+          milliseconds: 0,
+        }),
+        idx,
+      ).toISOString();
+
+      const match = incompleteTotals.find(
+        (t) =>
+          set(t.bin, {
+            minutes: 0,
+            seconds: 0,
+            milliseconds: 0,
+          }).toISOString() === bin,
+      );
+
+      return {
+        bin,
+        total: match?.total ?? 0,
+        divergent: match?.divergent ?? 0,
+      };
+    });
 
   const divergences = (await query(
     'SELECT * FROM requests WHERE divergent IS TRUE ORDER BY created_at DESC LIMIT 25;',
   )) as A[];
 
-  return json({ divergences, totals }, 200);
-};
-
-const reduc = (data: any) => {
-  const things = Array(6)
-    .fill(undefined)
-    .map((_, idx) => ({
-      date: format(subHours(new Date(), idx), 'K:00aaa'),
-      Total: 0,
-      Divergent: 0,
-    }));
-
-  for (const entry of data) {
-    const idx = things.findIndex(
-      (t) => t.date === format(parseISO(entry.bin), 'K:00aaa'),
-    );
-    if (idx) {
-      things[idx].Divergent = entry.divergent_count;
-      things[idx].Total = entry.total;
-    }
-  }
-
-  return things.reverse();
+  return json({ totals, divergences }, 200);
 };
 
 export default function Index() {
@@ -124,7 +131,7 @@ export default function Index() {
           <Card>
             <Text>Divergent</Text>
             <Metric>
-              {totals.reduce((total, curr) => total + curr.divergent_count, 0)}
+              {totals.reduce((total, curr) => total + curr.divergent, 0)}
             </Metric>
           </Card>
         </Col>
@@ -141,8 +148,14 @@ export default function Index() {
             <AreaChart
               showGradient={false}
               className="max-h-56"
-              data={reduc(totals)}
-              index="date"
+              data={totals
+                .map((t) => ({
+                  Divergent: t.divergent,
+                  Total: t.total,
+                  bin: format(parseISO(t.bin), 'K:mmaaa'),
+                }))
+                .reverse()}
+              index="bin"
               categories={['Divergent', 'Total']}
               colors={['rose', 'zinc']}
               valueFormatter={(num) => `${num}`}
