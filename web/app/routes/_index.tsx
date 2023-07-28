@@ -141,6 +141,7 @@ export default function Index() {
               <TableCell>
                 {formatDistanceToNow(parseISO(req.created_at), {
                   addSuffix: true,
+                  includeSeconds: true,
                 }).replace('about', '')}
               </TableCell>
               <TableCell>{new URL(req.control.url).pathname}</TableCell>
