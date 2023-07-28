@@ -161,7 +161,7 @@ export default function Index() {
                 .map((t) => ({
                   Divergent: t.divergent,
                   Total: t.total,
-                  bin: format(parseISO(t.bin), 'K:mmaaa'),
+                  bin: format(parseISO(t.bin), 'h:mmaaa'),
                 }))
                 .reverse()}
               index="bin"
