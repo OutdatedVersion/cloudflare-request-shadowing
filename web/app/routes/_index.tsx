@@ -23,7 +23,7 @@ import format from 'date-fns/format';
 import formatDistanceToNow from 'date-fns/formatDistanceToNow';
 import parseISO from 'date-fns/parseISO';
 import set from 'date-fns/set';
-import subHours from 'date-fns/subHours';
+import subMinutes from 'date-fns/subMinutes';
 import { useEffect } from 'react';
 
 export const meta: V2_MetaFunction = () => {
@@ -62,36 +62,34 @@ export const loader = async ({ context }: LoaderArgs) => {
       count(divergent)::int AS total,
       sum(divergent::int)::int AS divergent,
       date_bin(
-        INTERVAL '1 hour',
+        '30 minute'::interval,
         created_at,
-        now() - '6 hours'::interval
+        now() - '4 hours'::interval
       ) AS bin
      FROM
       requests
      WHERE 
-      now() - '6 hours'::interval <= created_at
+      now() - '4 hours'::interval <= created_at
      GROUP BY
       bin
      ORDER BY
       bin DESC;`,
   )) as Array<{ total: number; divergent: number; bin: Date }>;
 
-  const totals = Array(6)
+  const totals = Array(4 * 2)
     .fill(undefined)
     .map((_, idx) => {
-      const bin = subHours(
+      const bin = subMinutes(
         set(new Date(), {
-          minutes: 0,
           seconds: 0,
           milliseconds: 0,
         }),
-        idx,
+        30 * idx,
       ).toISOString();
 
       const match = incompleteTotals.find(
         (t) =>
           set(t.bin, {
-            minutes: 0,
             seconds: 0,
             milliseconds: 0,
           }).toISOString() === bin,
