@@ -15,11 +15,14 @@ import {
   TableHeaderCell,
   TableBody,
   TableCell,
-  Title,
   AreaChart,
+  Metric,
+  Text,
 } from '@tremor/react';
+import format from 'date-fns/format';
 import formatDistanceToNow from 'date-fns/formatDistanceToNow';
 import parseISO from 'date-fns/parseISO';
+import subHours from 'date-fns/subHours';
 import { useEffect } from 'react';
 
 export const meta: V2_MetaFunction = () => {
@@ -33,12 +36,19 @@ interface Stored {
   url: string;
   status: number;
   duration: number;
+  diff: {
+    added: number;
+    removed: number;
+    kept: number;
+    patches: [];
+  };
   response: string;
 }
 
 interface A {
   id: string;
   created_at: string;
+  divergent: boolean;
   control: Stored;
   shadows: Stored[];
 }
@@ -46,53 +56,56 @@ interface A {
 export const loader = async ({ context }: LoaderArgs) => {
   const query = neon(context.env.DATABASE_URL as string);
 
-  const result = (await query(
+  const totals = (await query(
+    `SELECT 
+      count(divergent)::int AS total,
+      sum(divergent::int)::int AS divergent_count,
+      date_bin(
+        INTERVAL '1 hour',
+        created_at,
+        now() - '6 hours'::interval
+      ) AS bin
+     FROM
+      requests
+     WHERE 
+      now() - '6 hours'::interval <= created_at
+     GROUP BY
+      bin
+     ORDER BY
+      bin DESC;`,
+  )) as Array<{ total: number; divergent_count: number; bin: string }>;
+
+  const divergences = (await query(
     'SELECT * FROM requests WHERE divergent IS TRUE ORDER BY created_at DESC LIMIT 25;',
   )) as A[];
 
-  return json(result, 200);
+  return json({ divergences, totals }, 200);
 };
 
-const chartdata = [
-  {
-    date: '11:00am',
-    Total: 0,
-    Divergent: 0,
-  },
-  {
-    date: '12:00pm',
-    Total: 0,
-    Divergent: 0,
-  },
-  {
-    date: '1:00pm',
-    Total: 0,
-    Divergent: 0,
-  },
-  {
-    date: '2:00pm',
-    Total: 0,
-    Divergent: 0,
-  },
-  {
-    date: '3:00pm',
-    Total: 0,
-    Divergent: 0,
-  },
-  {
-    date: '4:00pm',
-    Total: 0,
-    Divergent: 0,
-  },
-  {
-    date: '5:00pm',
-    Total: 0,
-    Divergent: 0,
-  },
-];
+const reduc = (data: any) => {
+  const things = Array(6)
+    .fill(undefined)
+    .map((_, idx) => ({
+      date: format(subHours(new Date(), idx), 'K:00aaa'),
+      Total: 0,
+      Divergent: 0,
+    }));
+
+  for (const entry of data) {
+    const idx = things.findIndex(
+      (t) => t.date === format(parseISO(entry.bin), 'K:00aaa'),
+    );
+    if (idx) {
+      things[idx].Divergent = entry.divergent_count;
+      things[idx].Total = entry.total;
+    }
+  }
+
+  return things.reverse();
+};
 
 export default function Index() {
-  const requests = useLoaderData<typeof loader>();
+  const { divergences, totals } = useLoaderData<typeof loader>();
   const revalidator = useRevalidator();
 
   useEffect(() => {
@@ -101,23 +114,37 @@ export default function Index() {
         revalidator.revalidate();
       }
     }, 5_000);
-
     return () => clearInterval(interval);
   });
 
   return (
     <div className="py-8 mx-4 md:mx-8">
       <Grid numItems={1} numItemsSm={2} numItemsLg={3} className="gap-2">
+        <Col>
+          <Card>
+            <Text>Divergent</Text>
+            <Metric>
+              {totals.reduce((total, curr) => total + curr.divergent_count, 0)}
+            </Metric>
+          </Card>
+        </Col>
+        <Col>
+          <Card>
+            <Text>Total</Text>
+            <Metric>
+              {totals.reduce((total, curr) => total + curr.total, 0)}
+            </Metric>
+          </Card>
+        </Col>
         <Col numColSpanSm={2} numColSpanLg={2}>
           <Card className="p-2">
-            <Title className="pl-2">Divergent requests</Title>
             <AreaChart
               showGradient={false}
               className="max-h-56"
-              data={chartdata}
+              data={reduc(totals)}
               index="date"
-              categories={['Total', 'Divergent']}
-              colors={['zinc', 'rose']}
+              categories={['Divergent', 'Total']}
+              colors={['rose', 'zinc']}
               valueFormatter={(num) => `${num}`}
             />
           </Card>
@@ -133,7 +160,7 @@ export default function Index() {
           </TableRow>
         </TableHead>
         <TableBody>
-          {requests.map((req) => (
+          {divergences.map((req) => (
             <TableRow
               key={req.id}
               className="transition-colors duration-100 hover:bg-gray-200"
