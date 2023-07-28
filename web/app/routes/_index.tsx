@@ -5,20 +5,6 @@ import {
   type V2_MetaFunction,
 } from '@remix-run/cloudflare';
 import { useLoaderData, useRevalidator } from '@remix-run/react';
-import {
-  Card,
-  Grid,
-  Col,
-  Table,
-  TableHead,
-  TableRow,
-  TableHeaderCell,
-  TableBody,
-  TableCell,
-  AreaChart,
-  Metric,
-  Text,
-} from '@tremor/react';
 import format from 'date-fns/format';
 import formatDistanceToNow from 'date-fns/formatDistanceToNow';
 import parseISO from 'date-fns/parseISO';
@@ -135,81 +121,43 @@ export default function Index() {
 
   return (
     <div className="py-8 mx-4 md:mx-8">
-      <Grid numItems={1} numItemsSm={2} numItemsLg={3} className="gap-2">
-        <Col>
-          <Card>
-            <Text>Divergent</Text>
-            <Metric>
-              {totals.reduce((total, curr) => total + curr.divergent, 0)}
-            </Metric>
-          </Card>
-        </Col>
-        <Col>
-          <Card>
-            <Text>Total</Text>
-            <Metric>
-              {totals.reduce((total, curr) => total + curr.total, 0)}
-            </Metric>
-          </Card>
-        </Col>
-        <Col numColSpanSm={2} numColSpanLg={2}>
-          <Card className="p-2">
-            <AreaChart
-              showGradient={false}
-              className="max-h-56"
-              data={totals
-                .map((t) => ({
-                  Divergent: t.divergent,
-                  Total: t.total,
-                  bin: format(parseISO(t.bin), 'h:mmaaa'),
-                }))
-                .reverse()}
-              index="bin"
-              categories={['Divergent', 'Total']}
-              colors={['rose', 'zinc']}
-              valueFormatter={(num) => `${num}`}
-            />
-          </Card>
-        </Col>
-      </Grid>
-      <Table className="mt-14">
-        <TableHead>
-          <TableRow>
-            <TableHeaderCell></TableHeaderCell>
-            <TableHeaderCell>Original request to</TableHeaderCell>
-            <TableHeaderCell>Shadowed request to</TableHeaderCell>
-            <TableHeaderCell>Changes</TableHeaderCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {divergences.map((req) => (
-            <TableRow
-              key={req.id}
-              className="transition-colors duration-100 hover:bg-gray-200"
-            >
-              <TableCell>
-                {formatDistanceToNow(parseISO(req.created_at), {
-                  addSuffix: true,
-                  includeSeconds: true,
-                }).replace('about', '')}
-              </TableCell>
-              <TableCell>{new URL(req.control.url).pathname}</TableCell>
-              <TableCell>{new URL(req.shadows[0].url).pathname}</TableCell>
-              <TableCell>
-                <span className="font-medium text-green-600">
-                  +{req.shadows[0].diff.added}
-                </span>
-                <span className="px-1 font-medium text-neutral-500">
-                  {req.shadows[0].diff.kept}
-                </span>
-                <span className="font-medium text-red-600">
-                  -{req.shadows[0].diff.removed}
-                </span>
-              </TableCell>
-            </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+      <div className="overflow-x-auto">
+        <table className="table">
+          <thead>
+            <tr>
+              <th></th>
+              <th>Original request to</th>
+              <th>Shadowed request to</th>
+              <th>Changes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {divergences.map((req) => (
+              <tr key={req.id} className="hover">
+                <td>
+                  {formatDistanceToNow(parseISO(req.created_at), {
+                    addSuffix: true,
+                    includeSeconds: true,
+                  }).replace('about', '')}
+                </td>
+                <td>{new URL(req.control.url).pathname}</td>
+                <td>{new URL(req.shadows[0].url).pathname}</td>
+                <td>
+                  <span className="font-medium text-green-600">
+                    +{req.shadows[0].diff.added}
+                  </span>
+                  <span className="px-1 font-medium text-neutral-500">
+                    {req.shadows[0].diff.kept}
+                  </span>
+                  <span className="font-medium text-red-600">
+                    -{req.shadows[0].diff.removed}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

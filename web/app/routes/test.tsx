@@ -1,3 +1,6 @@
+// https://master--63da8268a0da9970db6992aa.chromatic.com/?path=/story/examples-areachart--percent-area-chart
+// https://github.com/recharts/recharts/blob/a6dbd1c9ffc0d55654d0a96a2efc5fb42310906a/storybook/stories/Examples/cartesian/XAxis/XAxisWithTickFormatter.stories.tsx#L23
+
 import { type V2_MetaFunction } from '@remix-run/cloudflare';
 import format from 'date-fns/format';
 import parseISO from 'date-fns/parseISO';
@@ -73,7 +76,7 @@ export default function Test() {
       <div>
         <span>History (hours)</span>
         <input
-          className="ml-4 p-4 w-24 h-6 border-solid border-2"
+          className="ml-4 input input-bordered"
           type="number"
           defaultValue={hours}
           onBlur={(event) => {
@@ -84,7 +87,7 @@ export default function Test() {
       <div className="mt-4 mb-12">
         <span>Rollup period</span>
         <select
-          className="ml-4 p-4 w-24 h-6 border-solid border-2"
+          className="ml-4 select select-bordered"
           value={String(rollupPeriod)}
           onChange={(event) =>
             setRollupPeriod(parseInt(event.target.value, 10))
