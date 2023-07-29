@@ -10,7 +10,7 @@ import formatDistanceToNow from 'date-fns/formatDistanceToNow';
 import parseISO from 'date-fns/parseISO';
 import set from 'date-fns/set';
 import subMinutes from 'date-fns/subMinutes';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { EyeIcon } from '@heroicons/react/24/solid';
 
 export const meta: V2_MetaFunction = () => {
@@ -111,6 +111,7 @@ export default function Index() {
   const { divergences, totals } = useLoaderData<typeof loader>();
   const [selectedRequest, setSelectedRequest] = useState<A>();
   const revalidator = useRevalidator();
+  const drawerTrigger = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -123,7 +124,12 @@ export default function Index() {
 
   return (
     <div className="drawer drawer-end">
-      <input id="main-drawer" type="checkbox" className="drawer-toggle" />
+      <input
+        ref={drawerTrigger}
+        id="main-drawer"
+        type="checkbox"
+        className="drawer-toggle"
+      />
       <div className="drawer-content py-8 mx-4 md:mx-8">
         <div className="overflow-x-auto">
           <table className="table">
@@ -171,7 +177,14 @@ export default function Index() {
       </div>
       <div className="drawer-side">
         <label htmlFor="main-drawer" className="drawer-overlay"></label>
-        <div className="p-4 w-3/5 h-full bg-base-200 text-base-content">
+        <div className="p-4 w-full md:w-3/5 h-full bg-base-200 text-base-content">
+          <button
+            className="btn btn-sm btm-circle btn-neutral float-right md:invisible"
+            onClick={() => drawerTrigger.current?.click()}
+          >
+            x
+          </button>
+
           {selectedRequest ? (
             <div>
               <h1 className="text-lg font-bold">
