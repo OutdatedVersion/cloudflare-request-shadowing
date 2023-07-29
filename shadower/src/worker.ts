@@ -1,5 +1,9 @@
 import { NeonQueryFunction, neon } from "@neondatabase/serverless";
-import { Change, diffJson } from "diff";
+import {
+  Delta,
+  create,
+  formatters as diffFormattersIgnore,
+} from "jsondiffpatch";
 
 type ShadowingConfig = {
   targets: ShadowingTarget[];
@@ -10,6 +14,65 @@ type ShadowingTarget = {
   timeout: number;
   statuses: number[];
 };
+
+// https://datatracker.ietf.org/doc/html/rfc6902#section-3
+// Omitted `test` since that's not in our use-case
+type JsonPatch =
+  | {
+      op: "remove";
+      path: string;
+    }
+  | {
+      op: "add";
+      path: string;
+      value: /* Json*/ unknown;
+    }
+  | {
+      op: "copy";
+      from: string;
+      path: string;
+    }
+  | {
+      op: "move";
+      from: string;
+      path: string;
+    }
+  | {
+      op: "replace";
+      path: string;
+      value: /* Json */ unknown;
+    };
+
+const diffFormatters = diffFormattersIgnore as typeof diffFormattersIgnore & {
+  jsonpatch: {
+    // `Delta` is an `any` typed record so i'm
+    // essentially only getting a participating trophy here
+    format: (delta: Delta) => JsonPatch[];
+  };
+};
+const diff = create({
+  // `jsondiffpatch` first tries a `===` so primitives shouldn't pass through here
+  // `{}` of varying depths seem ok
+  // `[]`/tuples of varying depths seem ok
+  objectHash: (obj: Record<string, unknown>) => {
+    // JSON.stringify: this isn't a great idea.
+    // while we can detect simple moves with this
+    // it won't differentiate semantic moves
+
+    // ideas:
+    // - recursively call `jsondiffpatch`?
+    //   - not particularly difficult to do some denial of service
+    //   - oh. smooth brain. we don't have the other object to diff with.
+    // - create a hash of the keys + values?
+    //   - let's roll with this
+
+    // it's not a hash.
+    // but it is deterministic! :)
+    return Object.entries(obj)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .join(",");
+  },
+});
 
 const attempt = async <T, Err = Error>(fn: () => T | Promise<T>) => {
   try {
@@ -83,21 +146,24 @@ const shadow = async (
     return;
   }
 
-  const diff = diffJson(a, b, { ignoreWhitespace: true });
-  const changes = diff.reduce(
-    (prev, curr) => {
-      if (curr.added) {
-        prev.added += 1;
-      } else if (curr.removed) {
-        prev.removed += 1;
-      } else {
-        prev.kept += 1;
+  const delta = diff.diff(a, b) ?? {};
+  const patches = diffFormatters.jsonpatch.format(delta);
+
+  const summary = patches.reduce(
+    (summary, patch) => {
+      if (patch.op === "add") {
+        summary.added += 1;
+      } else if (patch.op === "remove") {
+        summary.removed += 1;
+      } else if (patch.op === "replace") {
+        summary.added += 1;
+        summary.removed += 1;
       }
-      return prev;
+      return summary;
     },
-    { added: 0, removed: 0, kept: 0 },
+    { added: 0, removed: 0 },
   );
-  const divergent = changes.added > 0 || changes.removed > 0;
+  const divergent = summary.added > 0 || summary.removed > 0;
 
   await query(
     "INSERT INTO requests (id, divergent, control, shadows) VALUES (gen_random_uuid(), $1, $2, $3);",
@@ -115,8 +181,8 @@ const shadow = async (
           duration,
           status: shadowed.status,
           diff: {
-            ...changes,
-            patches: diff,
+            ...summary,
+            patches,
           },
           response: responses[1],
         },
