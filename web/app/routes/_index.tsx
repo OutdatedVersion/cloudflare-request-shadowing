@@ -199,7 +199,7 @@ export default function Index() {
                 {selectedRequest.control.duration}ms
               </p>
 
-              <pre className="my-14">
+              <pre>
                 <code>
                   {JSON.stringify(
                     JSON.parse(selectedRequest.control.response),
@@ -208,13 +208,20 @@ export default function Index() {
                   )}
                 </code>
               </pre>
-              <pre>
+
+              <pre className="mt-14">
                 <code>
                   {JSON.stringify(
                     JSON.parse(selectedRequest.shadows[0].response),
                     null,
                     2,
                   )}
+                </code>
+              </pre>
+
+              <pre className="mt-14">
+                <code>
+                  {JSON.stringify(selectedRequest.shadows[0].diff, null, 2)}
                 </code>
               </pre>
             </div>
