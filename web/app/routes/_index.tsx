@@ -191,6 +191,9 @@ export default function Index() {
               <h1 className="text-lg font-bold">
                 Request to {selectedRequest.control.url}
               </h1>
+              <p className="text-md text-neutral-500">
+                {format(parseISO(selectedRequest.created_at), 'Pp')}
+              </p>
               <p className="text-neutral-400 text-md">
                 {selectedRequest.control.status}{' '}
                 {selectedRequest.control.duration}ms
