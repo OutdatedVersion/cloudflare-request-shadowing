@@ -143,7 +143,14 @@ export default function Index() {
             </thead>
             <tbody>
               {divergences.map((req) => (
-                <tr key={req.id} className="hover">
+                <tr
+                  key={req.id}
+                  className="hover cursor-pointer"
+                  onClick={() => {
+                    setSelectedRequest(req);
+                    drawerTrigger.current?.click();
+                  }}
+                >
                   <td>
                     {formatDistanceToNow(parseISO(req.created_at), {
                       addSuffix: true,
@@ -162,12 +169,6 @@ export default function Index() {
                     <span className="font-medium text-red-600">
                       -{req.shadows[0].diff.removed}
                     </span>
-                    <label htmlFor="main-drawer" className="ml-2 btn btn-xs">
-                      <EyeIcon
-                        className="w-4 h-4"
-                        onClick={() => setSelectedRequest(req)}
-                      />
-                    </label>
                   </td>
                 </tr>
               ))}
