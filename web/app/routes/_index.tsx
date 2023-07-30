@@ -11,7 +11,6 @@ import parseISO from 'date-fns/parseISO';
 import set from 'date-fns/set';
 import subMinutes from 'date-fns/subMinutes';
 import { useEffect, useRef, useState } from 'react';
-import { EyeIcon } from '@heroicons/react/24/solid';
 
 export const meta: V2_MetaFunction = () => {
   return [
