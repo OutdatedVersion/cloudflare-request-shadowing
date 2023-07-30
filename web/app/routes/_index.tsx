@@ -178,7 +178,7 @@ export default function Index() {
       </div>
       <div className="drawer-side">
         <label htmlFor="main-drawer" className="drawer-overlay"></label>
-        <div className="p-4 w-full md:w-9/12 h-full bg-base-200 text-base-content">
+        <div className="p-4 w-full md:w-9/12 h-fit bg-base-200 text-base-content">
           <button
             className="btn btn-sm btm-circle btn-neutral float-right md:invisible"
             onClick={() => drawerTrigger.current?.click()}
