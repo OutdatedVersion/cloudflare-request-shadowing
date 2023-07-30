@@ -11,6 +11,17 @@ import parseISO from 'date-fns/parseISO';
 import set from 'date-fns/set';
 import subMinutes from 'date-fns/subMinutes';
 import { useEffect, useRef, useState } from 'react';
+import { create, formatters } from 'jsondiffpatch';
+
+import '~/diff.css';
+
+const diff = create({
+  objectHash: (obj: Record<string, unknown>) => {
+    return Object.entries(obj)
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .join(',');
+  },
+});
 
 export const meta: V2_MetaFunction = () => {
   return [
@@ -112,6 +123,15 @@ export default function Index() {
   const revalidator = useRevalidator();
   const drawerTrigger = useRef<HTMLInputElement | null>(null);
 
+  const [unchanged, setUnchanged] = useState(true);
+  useEffect(() => {
+    if (unchanged) {
+      formatters.html.showUnchanged(true);
+    } else {
+      formatters.html.hideUnchanged();
+    }
+  }, [unchanged]);
+
   useEffect(() => {
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
@@ -198,31 +218,24 @@ export default function Index() {
                 {selectedRequest.control.duration}ms
               </p>
 
-              <pre>
-                <code>
-                  {JSON.stringify(
+              <input
+                type="checkbox"
+                checked={unchanged}
+                className="checkbox mt-14 checkbox-sm"
+                onChange={() => setUnchanged((prev) => !prev)}
+              />
+              <div
+                className="font-mono bg-base-300 p-3 w-fit rounded-sm"
+                dangerouslySetInnerHTML={{
+                  __html: formatters.html.format(
+                    diff.diff(
+                      JSON.parse(selectedRequest.control.response),
+                      JSON.parse(selectedRequest.shadows[0].response),
+                    )!,
                     JSON.parse(selectedRequest.control.response),
-                    null,
-                    2,
-                  )}
-                </code>
-              </pre>
-
-              <pre className="mt-14">
-                <code>
-                  {JSON.stringify(
-                    JSON.parse(selectedRequest.shadows[0].response),
-                    null,
-                    2,
-                  )}
-                </code>
-              </pre>
-
-              <pre className="mt-14">
-                <code>
-                  {JSON.stringify(selectedRequest.shadows[0].diff, null, 2)}
-                </code>
-              </pre>
+                  ),
+                }}
+              />
             </div>
           ) : null}
         </div>
