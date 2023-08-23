@@ -1,4 +1,3 @@
-import { neon } from '@neondatabase/serverless';
 import {
   json,
   type LoaderArgs,
@@ -25,8 +24,8 @@ const diff = create({
 
 export const meta: V2_MetaFunction = () => {
   return [
-    { title: 'New Remix App' },
-    { name: 'description', content: 'Welcome to Remix!' },
+    { title: 'Request mirroring' },
+    { name: 'description', content: 'View mirrored requests' },
   ];
 };
 
@@ -47,78 +46,40 @@ interface A {
   id: string;
   created_at: string;
   divergent: boolean;
-  control: Stored;
+  control: Stored & {
+    request: { method: string; headers: Record<string, string> };
+  };
   shadows: Stored[];
 }
 
 export const loader = async ({ context }: LoaderArgs) => {
-  const query = neon(context.env.DATABASE_URL as string);
-
-  const totalsQueryStart = Date.now();
-  const incompleteTotals = (await query(
-    `SELECT 
-      count(divergent)::int AS total,
-      sum(divergent::int)::int AS divergent,
-      date_bin(
-        '30 minute'::interval,
-        created_at,
-        now() - '4 hours'::interval
-      ) AS bin
-     FROM
-      requests
-     WHERE 
-      now() - '4 hours'::interval <= created_at
-     GROUP BY
-      bin
-     ORDER BY
-      bin DESC;`,
-  )) as Array<{ total: number; divergent: number; bin: Date }>;
-  const totalsQuery = Date.now() - totalsQueryStart;
-
-  const totals = Array(4 * 2)
-    .fill(undefined)
-    .map((_, idx) => {
-      const bin = subMinutes(
-        set(new Date(), {
-          seconds: 0,
-          milliseconds: 0,
-        }),
-        30 * idx,
-      ).toISOString();
-
-      const match = incompleteTotals.find(
-        (t) =>
-          set(t.bin, {
-            seconds: 0,
-            milliseconds: 0,
-          }).toISOString() === bin,
-      );
-
-      return {
-        bin,
-        total: match?.total ?? 0,
-        divergent: match?.divergent ?? 0,
-      };
-    });
-
   const divergencesQueryStart = Date.now();
-  const divergences = (await query(
-    'SELECT * FROM requests WHERE divergent IS TRUE ORDER BY created_at DESC LIMIT 25;',
-  )) as A[];
+  const divergences = (
+    (await (
+      await fetch(
+        'https://request-mirroring.nelnetvelocity.workers.dev/api/data',
+        {
+          headers: {
+            authorization: 'idk scurvy-reuse-bulldozer',
+          },
+        },
+      )
+    ).json()) as any
+  ).divergences as A[];
   const divergencesQuery = Date.now() - divergencesQueryStart;
 
   return json(
-    { totals, divergences },
+    { divergences },
     {
       headers: {
-        'server-timing': `tq;dur=${totalsQuery},dq;dur=${divergencesQuery}`,
+        'server-timing': `dq;dur=${divergencesQuery}`,
       },
     },
   );
 };
 
 export default function Index() {
-  const { divergences, totals } = useLoaderData<typeof loader>();
+  const { divergences } = useLoaderData<typeof loader>();
   const [selectedRequest, setSelectedRequest] = useState<A>();
   const revalidator = useRevalidator();
   const drawerTrigger = useRef<HTMLInputElement | null>(null);
@@ -176,8 +137,22 @@ export default function Index() {
                       includeSeconds: true,
                     }).replace('about', '')}
                   </td>
-                  <td>{new URL(req.control.url).pathname}</td>
-                  <td>{new URL(req.shadows[0].url).pathname}</td>
+                  <td>
+                    {new URL(req.control.url).pathname}
+                    {req.control.status !== 200 ? (
+                      <span className="ml-2 badge badge-sm badge-error text-white">
+                        {req.control.status}
+                      </span>
+                    ) : null}
+                  </td>
+                  <td>
+                    {new URL(req.shadows[0].url).pathname}
+                    {req.shadows[0].status !== 200 ? (
+                      <span className="ml-2 badge badge-sm badge-error text-white">
+                        {req.shadows[0].status}
+                      </span>
+                    ) : null}
+                  </td>
                   <td>
                     <span className="font-medium text-green-600">
                       +{req.shadows[0].diff.added}
@@ -197,7 +172,7 @@ export default function Index() {
       </div>
       <div className="drawer-side">
         <label htmlFor="main-drawer" className="drawer-overlay"></label>
-        <div className="p-4 w-full md:w-9/12 h-fit min-h-full bg-base-200 text-base-content">
+        <div className="p-4 w-full md:w-10/12 h-fit min-h-full bg-base-200 text-base-content">
           <button
             className="btn btn-sm btm-circle btn-neutral float-right md:invisible"
             onClick={() => drawerTrigger.current?.click()}
@@ -208,7 +183,9 @@ export default function Index() {
           {selectedRequest ? (
             <div>
               <h1 className="text-lg font-bold">
-                Request to {selectedRequest.control.url}
+                {selectedRequest.control.request.method}{' '}
+                {new URL(selectedRequest.control.url).pathname +
+                  new URL(selectedRequest.control.url).search}
               </h1>
               <p className="text-md text-neutral-500">
                 {format(parseISO(selectedRequest.created_at), 'Pp')}
@@ -218,12 +195,27 @@ export default function Index() {
                 {selectedRequest.control.duration}ms
               </p>
 
-              <input
-                type="checkbox"
-                checked={unchanged}
-                className="checkbox mt-14 checkbox-sm"
-                onChange={() => setUnchanged((prev) => !prev)}
-              />
+              <div className="mt-14">
+                <p>
+                  <span className="bg-red-300">Red</span> is control
+                </p>
+                <p>
+                  <span className="bg-green-300">Green</span> is mirrored
+                </p>
+              </div>
+
+              <div className="form-control w-52">
+                <label className="label cursor-pointer">
+                  <span className="label-text">Show similar properties</span>
+                  <input
+                    type="checkbox"
+                    checked={unchanged}
+                    className="toggle toggle-sm my-4"
+                    onChange={() => setUnchanged((prev) => !prev)}
+                  />
+                </label>
+              </div>
+
               <div
                 className="font-mono bg-base-300 p-3 w-fit rounded-sm"
                 dangerouslySetInnerHTML={{

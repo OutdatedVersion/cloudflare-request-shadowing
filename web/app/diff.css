@@ -20,6 +20,7 @@ ul.jsondiffpatch-delta {
   padding: 0 0 0 20px;
   margin: 0;
 }
+/*  */
 .jsondiffpatch-added .jsondiffpatch-property-name,
 .jsondiffpatch-added .jsondiffpatch-value pre,
 .jsondiffpatch-modified .jsondiffpatch-right-value pre,
@@ -27,6 +28,18 @@ ul.jsondiffpatch-delta {
   background: #bbffbb;
   border-radius: 0.15rem;
 }
+@media (prefers-color-scheme: dark) {
+  .jsondiffpatch-added .jsondiffpatch-property-name,
+  .jsondiffpatch-added .jsondiffpatch-value pre,
+  .jsondiffpatch-modified .jsondiffpatch-right-value pre,
+  .jsondiffpatch-textdiff-added {
+    /* bg-green-400 */
+    background: rgb(74 222 128);
+    border-radius: 0.15rem;
+    color: white;
+  }
+}
+/*  */
 .jsondiffpatch-deleted .jsondiffpatch-property-name,
 .jsondiffpatch-deleted pre,
 .jsondiffpatch-modified .jsondiffpatch-left-value pre,
@@ -34,6 +47,18 @@ ul.jsondiffpatch-delta {
   background: #ffbbbb;
   border-radius: 0.15rem;
 }
+@media (prefers-color-scheme: dark) {
+  .jsondiffpatch-deleted .jsondiffpatch-property-name,
+  .jsondiffpatch-deleted pre,
+  .jsondiffpatch-modified .jsondiffpatch-left-value pre,
+  .jsondiffpatch-textdiff-deleted {
+    /* bg-red-400 */
+    background: rgb(248 113 113);
+    border-radius: 0.15rem;
+    color: white;
+  }
+}
+/*  */
 .jsondiffpatch-unchanged,
 .jsondiffpatch-movedestination {
   color: gray;
@@ -160,7 +185,9 @@ ul.jsondiffpatch-textdiff {
   font-weight: bold;
 }
 
-.jsondiffpatch-added, .jsondiffpatch-unchanged, .jsondiffpatch-removed {
+.jsondiffpatch-added,
+.jsondiffpatch-unchanged,
+.jsondiffpatch-removed {
   padding-top: 1.5px;
   padding-bottom: 1.5px;
 }
