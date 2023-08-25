@@ -9,6 +9,8 @@ import {
   ScrollRestoration,
 } from '@remix-run/react';
 import stylesheet from '~/tailwind.css';
+import { useHydrated } from 'remix-utils';
+import { useEffect, useRef } from 'react';
 
 export const links: LinksFunction = () => [
   { rel: 'stylesheet', href: stylesheet },
@@ -16,6 +18,42 @@ export const links: LinksFunction = () => [
 ];
 
 export default function App() {
+  const hydrated = useHydrated();
+  const initializedDatadogRum = useRef(false);
+
+  useEffect(() => {
+    if (!hydrated) {
+      return;
+    }
+
+    if (initializedDatadogRum.current) {
+      console.log('Skipping Datadog RUM start: Already started');
+      return;
+    }
+
+    initializedDatadogRum.current = true;
+
+    import('@datadog/browser-rum').then(({ datadogRum }) => {
+      datadogRum.init({
+        applicationId: '',
+        clientToken: '',
+        site: 'datadoghq.com',
+        service: 'request-shadowing',
+        env: 'dev',
+        version: '1.0.0',
+        sessionSampleRate: 100,
+        sessionReplaySampleRate: 100,
+        trackUserInteractions: true,
+        trackResources: true,
+        trackLongTasks: true,
+        defaultPrivacyLevel: 'mask-user-input',
+      });
+
+      datadogRum.startSessionReplayRecording();
+      console.log('Started Datadog RUM');
+    });
+  }, [hydrated]);
+
   return (
     <html lang="en">
       <head>
