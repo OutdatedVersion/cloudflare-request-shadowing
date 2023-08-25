@@ -258,48 +258,6 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     const url = new URL(request.url);
 
-    if (
-      url.hostname === "request-mirroring.nelnetvelocity.workers.dev" &&
-      url.pathname === "/api/data"
-    ) {
-      const encoder = new TextEncoder();
-      const pw = encoder.encode("scurvy-reuse-bulldozer");
-
-      const auth = request.headers.get("authorization");
-      const key = auth?.split(" ")[1];
-      if (!key || !crypto.subtle.timingSafeEqual(pw, encoder.encode(key))) {
-        return new Response(undefined, {
-          status: 204,
-        });
-      }
-
-      const client = await getClient(env);
-
-      const divergencesQueryStart = Date.now();
-      const divergences = (
-        await client.query(
-          "SELECT * FROM requests WHERE divergent IS TRUE ORDER BY created_at DESC LIMIT 50;",
-        )
-      ).rows;
-      const divergencesQuery = Date.now() - divergencesQueryStart;
-
-      return new Response(
-        JSON.stringify(
-          {
-            divergences,
-          },
-          null,
-          2,
-        ),
-        {
-          headers: {
-            "content-type": "application/json",
-            "server-timing": `db;dur=${divergencesQuery}`,
-          },
-        },
-      );
-    }
-
     const config = getConfig(url);
 
     const start = Date.now();
