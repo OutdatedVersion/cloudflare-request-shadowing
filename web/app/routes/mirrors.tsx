@@ -104,8 +104,8 @@ export default function MirrorsList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const counter = useRef(0);
-  const test = useRef(new Map<string, string>());
+  const responseGroups = useRef(new Map<string, string>());
+  const responseGroupsIdx = useRef(0);
 
   return (
     <div className="drawer drawer-end">
@@ -203,14 +203,14 @@ export default function MirrorsList() {
                   .map((d) => d.path)
                   .join('|');
 
-                let bucket = test.current.get(digest);
+                let bucket = responseGroups.current.get(digest);
                 if (bucket === undefined) {
                   const startingEmoji = 0x1f950;
                   bucket = String.fromCodePoint(
-                    startingEmoji + counter.current++,
+                    startingEmoji + responseGroupsIdx.current++,
                   );
+                  responseGroups.current.set(digest, bucket);
                 }
-                test.current.set(digest, bucket);
 
                 return (
                   <tr
@@ -232,12 +232,7 @@ export default function MirrorsList() {
                       }).replace('about', '')}
                     </td>
                     <td>
-                      <div
-                        className="tooltip tooltip-bottom before:whitespace-pre-wrap"
-                        data-tip={`test\nhi\nasdf\nasdf`}
-                      >
-                        <span className="text-2xl">{bucket}</span>
-                      </div>
+                      <span className="text-2xl">{bucket}</span>
                     </td>
                     <td>
                       {new URL(req.control.url).pathname}
