@@ -1,5 +1,5 @@
 {
-  "name": "cf-request-shadowing",
+  "name": "api",
   "version": "0.0.0",
   "private": true,
   "scripts": {
@@ -8,14 +8,14 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20230419.0",
-    "@types/json-diff": "^1.0.0",
     "@types/pg": "^8.10.2",
-    "prettier": "^3.0.0",
     "typescript": "^5.0.4",
     "wrangler": "^3.0.0"
   },
   "dependencies": {
-    "jsondiffpatch": "^0.4.1",
-    "pg": "^8.11.3"
+    "date-fns": "^2.30.0",
+    "kysely": "^0.26.1",
+    "pg": "^8.11.3",
+    "zod": "^3.22.2"
   }
 }

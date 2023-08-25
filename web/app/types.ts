@@ -1,3 +1,8 @@
+export type Patch =
+  | { op: 'add'; path: string; value: unknown }
+  | { op: 'replace'; path: string; value: unknown }
+  | { op: 'remove'; path: string };
+
 export interface MirrorResponse {
   url: string;
   status: number;
@@ -6,7 +11,7 @@ export interface MirrorResponse {
     added: number;
     removed: number;
     kept: number;
-    patches: [];
+    patches: Patch[];
   };
   response: string;
 }

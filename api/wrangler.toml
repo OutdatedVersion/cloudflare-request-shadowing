@@ -1,0 +1,14 @@
+name = "request-mirroring-api"
+main = "src/worker.ts"
+compatibility_date = "2023-08-21"
+node_compat = true
+
+workers_dev = true
+[placement]
+mode = "smart"
+
+[vars]
+DB_USERNAME = ""
+DB_HOST = ""
+DB_PORT = "5432"
+DB_NAME = "request_mirroring"

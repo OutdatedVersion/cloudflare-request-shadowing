@@ -1,8 +1,19 @@
-name = "request-shadowing"
+name = "request-mirroring"
 main = "src/worker.ts"
-compatibility_date = "2023-07-24"
+compatibility_date = "2023-08-14"
+node_compat = true
+logpush = false
 
-[[kv_namespaces]]
-binding = "kv"
-id = "e3405f439f9b41f3af5359196218a8d3"
-preview_id = "3d306f57be5d41b6bc8880951d937ead"
+workers_dev = false
+routes = [
+  { pattern = "bwatkins.dev/jaja/a*", zone_name = "bwatkins.dev" }
+]
+
+[placement]
+mode = "smart"
+
+[vars]
+DB_USERNAME = ""
+DB_HOST = ""
+DB_PORT = "5432"
+DB_NAME = "request_mirroring"

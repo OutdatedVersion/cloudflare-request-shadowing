@@ -6,22 +6,64 @@ import {
   useMatches,
   useNavigate,
 } from '@remix-run/react';
+import differenceInHours from 'date-fns/differenceInHours';
+import format from 'date-fns/format';
 import formatDistanceToNow from 'date-fns/formatDistanceToNow';
 import parseISO from 'date-fns/parseISO';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Area,
+  AreaChart,
+  CartesianGrid,
+  Legend,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts';
 import type { Mirror } from '~/types';
+import cn from 'classnames';
 
 export const loader = async (a: LoaderArgs) => {
+  const divergences = await fetch(
+    'https://request-shadowing-demo.bwatkins.dev/mirrors?divergent',
+    {
+      headers: {
+        authorization: 'idk scurvy-reuse-bulldozer',
+      },
+    },
+  )
+    .then((resp) => resp.json() as { data?: Mirror[] })
+    .then((resp) => resp.data);
+
+  const lookback = divergences
+    ? differenceInHours(
+        new Date(),
+        parseISO(divergences[divergences.length - 1].created_at),
+      ) + 1
+    : 4;
+
   return defer({
-    divergences: fetch(
-      'https://request-shadowing-demo.bwatkins.dev/mirrors?divergent',
+    divergences,
+    aggregation: fetch(
+      `https://request-shadowing-demo.bwatkins.dev/mirrors/aggregation?lookbackPeriodHours=${lookback}`,
       {
         headers: {
           authorization: 'idk scurvy-reuse-bulldozer',
         },
       },
     )
-      .then((resp) => resp.json() as { data?: Mirror[] })
+      .then(
+        (resp) =>
+          resp.json() as {
+            data?: Array<{
+              start: string;
+              end: string;
+              total: number;
+              divergent: number;
+            }>;
+          },
+      )
       .then((resp) => resp.data),
   });
 };
@@ -40,24 +82,30 @@ const getStatusCodeBadge = (statusCode: number) => {
 };
 
 export default function MirrorsList() {
-  const { divergences: loading } = useLoaderData<typeof loader>();
+  const { divergences, aggregation } = useLoaderData<typeof loader>();
   const drawerTrigger = useRef<HTMLInputElement | null>(null);
   const nav = useNavigate();
   const matches = useMatches();
+  const selectedRequestRoute = useMemo(
+    () => matches.find((m) => m.id.includes('$requestId')),
+    [matches],
+  );
 
   const [mirrorHint, setMirrorHint] = useState<Mirror | null>(null);
 
   // Open the details drawer if someone uses a direct link
   const scheduled = useRef(false);
   useEffect(() => {
-    const hasSelection = matches.some((m) => m.id.includes('$requestId'));
-    if (hasSelection && !scheduled.current) {
+    if (selectedRequestRoute && !scheduled.current) {
       console.log('Toggling drawer');
       drawerTrigger.current?.click();
       scheduled.current = !scheduled.current;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const counter = useRef(0);
+  const test = useRef(new Map<string, string>());
 
   return (
     <div className="drawer drawer-end">
@@ -68,58 +116,148 @@ export default function MirrorsList() {
         className="drawer-toggle"
       />
       <div className="drawer-content py-8 mx-4 md:mx-8">
+        <div className="mb-8">
+          <Suspense
+            fallback={
+              <div className="w-full h-96 rounded-md bg-base-200 animate-pulse" />
+            }
+          >
+            <Await
+              resolve={aggregation}
+              children={(data) => (
+                <ResponsiveContainer height={400} width="100%">
+                  <AreaChart data={data} height={300} width={600}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis
+                      allowDataOverflow
+                      dataKey="end"
+                      tickSize={10}
+                      tickFormatter={(val, idx) =>
+                        format(parseISO(val), 'h:mmaaa')
+                      }
+                      type="category"
+                    />
+                    <YAxis />
+                    <Tooltip
+                      content={({ payload }) => {
+                        if (!payload || !payload.length) {
+                          return null;
+                        }
+
+                        const idk = payload[0].payload as (typeof data)[number];
+                        const pct =
+                          idk.total !== 0 &&
+                          ` ${((idk.divergent / idk.total) * 100).toFixed(
+                            0,
+                          )}% divergent`;
+
+                        return (
+                          <div className="p-2 bg-gray-200 rounded-sm text-black">
+                            <div className="font-bold">
+                              {format(parseISO(idk.start), 'h:mmaaa')} to{' '}
+                              {format(parseISO(idk.end), 'h:mmaaa')}
+                            </div>
+                            <div className="mt-1.5">Total: {idk.total}</div>
+                            <div>Divergent: {idk.divergent}</div>
+                            <div className="mt-1.5">{pct}</div>
+                          </div>
+                        );
+                      }}
+                    />
+                    <Legend />
+
+                    <Area dataKey="total" stroke="#75716f" fill="#75716f" />
+                    <Area
+                      dataKey="divergent"
+                      stroke="rgb(185 28 28)"
+                      fill="rgb(185 28 28)"
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              )}
+            />
+          </Suspense>
+        </div>
+
         <div className="overflow-x-auto">
           <table className="table">
             <thead>
               <tr>
                 <th></th>
+                <th>
+                  <div
+                    className="tooltip tooltip-bottom before:whitespace-pre-wrap"
+                    data-tip="Shadowed responses which share differing keys will be grouped together"
+                  >
+                    Group
+                  </div>
+                </th>
                 <th>Original request to</th>
                 <th>Shadowed request to</th>
                 <th>Changes</th>
               </tr>
             </thead>
             <tbody>
-              <Suspense>
-                <Await
-                  resolve={loading}
-                  children={(divergences) =>
-                    divergences.map((req) => (
-                      <tr
-                        key={req.id}
-                        className="hover cursor-pointer"
-                        onClick={() => {
-                          drawerTrigger.current?.click();
-                          setMirrorHint(req);
-                          nav(`/mirrors/${req.id}`);
-                        }}
+              {divergences.map((req) => {
+                const digest = req.shadows[0].diff.patches
+                  .map((d) => d.path)
+                  .join('|');
+
+                let bucket = test.current.get(digest);
+                if (bucket === undefined) {
+                  const startingEmoji = 0x1f950;
+                  bucket = String.fromCodePoint(
+                    startingEmoji + counter.current++,
+                  );
+                }
+                test.current.set(digest, bucket);
+
+                return (
+                  <tr
+                    key={req.id}
+                    className={cn('hover cursor-pointer', {
+                      'bg-base-200':
+                        selectedRequestRoute?.params.requestId === req.id,
+                    })}
+                    onClick={() => {
+                      drawerTrigger.current?.click();
+                      setMirrorHint(req);
+                      nav(`/mirrors/${req.id}`, { preventScrollReset: true });
+                    }}
+                  >
+                    <td>
+                      {formatDistanceToNow(parseISO(req.created_at), {
+                        addSuffix: true,
+                        includeSeconds: true,
+                      }).replace('about', '')}
+                    </td>
+                    <td>
+                      <div
+                        className="tooltip tooltip-bottom before:whitespace-pre-wrap"
+                        data-tip={`test\nhi\nasdf\nasdf`}
                       >
-                        <td>
-                          {formatDistanceToNow(parseISO(req.created_at), {
-                            addSuffix: true,
-                            includeSeconds: true,
-                          }).replace('about', '')}
-                        </td>
-                        <td>
-                          {new URL(req.control.url).pathname}
-                          {getStatusCodeBadge(req.control.status)}
-                        </td>
-                        <td>
-                          {new URL(req.shadows[0].url).pathname}
-                          {getStatusCodeBadge(req.shadows[0].status)}
-                        </td>
-                        <td>
-                          <span className="font-medium text-green-600">
-                            +{req.shadows[0].diff.added}
-                          </span>
-                          <span className="pl-1.5 font-medium text-red-600">
-                            -{req.shadows[0].diff.removed}
-                          </span>
-                        </td>
-                      </tr>
-                    ))
-                  }
-                />
-              </Suspense>
+                        <span className="text-2xl">{bucket}</span>
+                      </div>
+                    </td>
+                    <td>
+                      {new URL(req.control.url).pathname}
+                      {getStatusCodeBadge(req.control.status)}
+                    </td>
+                    <td>
+                      {new URL(req.shadows[0].url).pathname}
+                      {getStatusCodeBadge(req.shadows[0].status)}
+                    </td>
+                    <td>
+                      <span className="font-medium text-green-600">
+                        +{req.shadows[0].diff.added}
+                      </span>
+                      <span className="pl-1.5 font-medium text-red-600">
+                        -{req.shadows[0].diff.removed}
+                      </span>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -129,7 +267,7 @@ export default function MirrorsList() {
           htmlFor="main-drawer"
           className="drawer-overlay"
           onClick={() => {
-            nav('/mirrors');
+            nav('/mirrors', { preventScrollReset: true });
             setMirrorHint(null);
           }}
         ></label>
@@ -137,7 +275,7 @@ export default function MirrorsList() {
           <button
             className="btn btn-sm btm-circle btn-neutral float-right md:invisible"
             onClick={() => {
-              nav('/mirrors');
+              nav('/mirrors', { preventScrollReset: true });
               setMirrorHint(null);
               drawerTrigger.current?.click();
             }}
