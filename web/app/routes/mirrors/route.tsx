@@ -182,7 +182,7 @@ export default function MirrorsList() {
           </Suspense>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto overflow-y-hidden">
           <table className="table">
             <thead>
               <tr>
@@ -201,62 +201,76 @@ export default function MirrorsList() {
               </tr>
             </thead>
             <tbody>
-              {divergences.map((req) => {
-                const digest = req.shadows[0].diff.patches
-                  .map((d) => d.path)
-                  .join('|');
+              {divergences
+                .map((req) => {
+                  const digest = req.shadows[0].diff.patches
+                    .map((d) => d.path)
+                    .join('|');
 
-                let bucket = responseGroups.current.get(digest);
-                if (bucket === undefined) {
-                  const startingEmoji = 0x1f950;
-                  bucket = String.fromCodePoint(
-                    startingEmoji + responseGroupsIdx.current++,
+                  let bucket = responseGroups.current.get(digest);
+                  if (bucket === undefined) {
+                    const startingEmoji = 0x1f950;
+                    bucket = String.fromCodePoint(
+                      startingEmoji + responseGroupsIdx.current++,
+                    );
+                    responseGroups.current.set(digest, bucket);
+                    setResponseGroupsIdxState(responseGroupsIdx.current);
+                  }
+
+                  return { ...req, digest, digestEmoji: bucket };
+                })
+                .map((req, _, array) => {
+                  return (
+                    <tr
+                      key={req.id}
+                      className={cn('hover cursor-pointer', {
+                        'bg-base-200':
+                          selectedRequestRoute?.params.requestId === req.id,
+                      })}
+                      onClick={() => {
+                        drawerTrigger.current?.click();
+                        setMirrorHint(req);
+                        nav(`/mirrors/${req.id}`, { preventScrollReset: true });
+                      }}
+                    >
+                      <td>
+                        {formatDistanceToNow(parseISO(req.created_at), {
+                          addSuffix: true,
+                          includeSeconds: true,
+                        }).replace('about', '')}
+                      </td>
+                      <td>
+                        <span
+                          className="text-2xl tooltip tooltip-bottom before:whitespace-pre-wrap"
+                          data-tip={`${array.reduce(
+                            (num, curr) =>
+                              num +
+                              (req.digestEmoji === curr.digestEmoji ? 1 : 0),
+                            0,
+                          )} ${req.digestEmoji}s total`}
+                        >
+                          {req.digestEmoji}
+                        </span>
+                      </td>
+                      <td>
+                        {new URL(req.control.url).pathname}
+                        {getStatusCodeBadge(req.control.status)}
+                      </td>
+                      <td>
+                        {new URL(req.shadows[0].url).pathname}
+                        {getStatusCodeBadge(req.shadows[0].status)}
+                      </td>
+                      <td>
+                        <span className="font-medium text-green-600">
+                          +{req.shadows[0].diff.added}
+                        </span>
+                        <span className="pl-1.5 font-medium text-red-600">
+                          -{req.shadows[0].diff.removed}
+                        </span>
+                      </td>
+                    </tr>
                   );
-                  responseGroups.current.set(digest, bucket);
-                  setResponseGroupsIdxState(responseGroupsIdx.current);
-                }
-
-                return (
-                  <tr
-                    key={req.id}
-                    className={cn('hover cursor-pointer', {
-                      'bg-base-200':
-                        selectedRequestRoute?.params.requestId === req.id,
-                    })}
-                    onClick={() => {
-                      drawerTrigger.current?.click();
-                      setMirrorHint(req);
-                      nav(`/mirrors/${req.id}`, { preventScrollReset: true });
-                    }}
-                  >
-                    <td>
-                      {formatDistanceToNow(parseISO(req.created_at), {
-                        addSuffix: true,
-                        includeSeconds: true,
-                      }).replace('about', '')}
-                    </td>
-                    <td>
-                      <span className="text-2xl">{bucket}</span>
-                    </td>
-                    <td>
-                      {new URL(req.control.url).pathname}
-                      {getStatusCodeBadge(req.control.status)}
-                    </td>
-                    <td>
-                      {new URL(req.shadows[0].url).pathname}
-                      {getStatusCodeBadge(req.shadows[0].status)}
-                    </td>
-                    <td>
-                      <span className="font-medium text-green-600">
-                        +{req.shadows[0].diff.added}
-                      </span>
-                      <span className="pl-1.5 font-medium text-red-600">
-                        -{req.shadows[0].diff.removed}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
+                })}
             </tbody>
           </table>
         </div>
