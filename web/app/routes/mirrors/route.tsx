@@ -24,9 +24,12 @@ import {
 import type { Mirror } from '~/types';
 import cn from 'classnames';
 
-export const loader = async (a: LoaderArgs) => {
+export const loader = async ({ request }: LoaderArgs) => {
+  const url = new URL(request.url);
+  const limit = url.searchParams.get('limit') ?? 50;
+
   const divergences = await fetch(
-    'https://request-shadowing-demo.bwatkins.dev/mirrors?divergent',
+    `https://request-shadowing-demo.bwatkins.dev/mirrors?divergent&limit=${limit}`,
     {
       headers: {
         authorization: 'idk scurvy-reuse-bulldozer',
