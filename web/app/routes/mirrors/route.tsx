@@ -106,6 +106,7 @@ export default function MirrorsList() {
 
   const responseGroups = useRef(new Map<string, string>());
   const responseGroupsIdx = useRef(0);
+  const [responseGroupsIdxState, setResponseGroupsIdxState] = useState(0);
 
   return (
     <div className="drawer drawer-end">
@@ -165,7 +166,6 @@ export default function MirrorsList() {
                       }}
                     />
                     <Legend />
-
                     <Area dataKey="total" stroke="#75716f" fill="#75716f" />
                     <Area
                       dataKey="divergent"
@@ -187,7 +187,7 @@ export default function MirrorsList() {
                 <th>
                   <div
                     className="tooltip tooltip-bottom before:whitespace-pre-wrap"
-                    data-tip="Shadowed responses which share differing keys will be grouped together"
+                    data-tip={`Shadowed responses which share differing keys will be grouped together\n\nShowing ${responseGroupsIdxState} groups`}
                   >
                     Group
                   </div>
@@ -210,6 +210,7 @@ export default function MirrorsList() {
                     startingEmoji + responseGroupsIdx.current++,
                   );
                   responseGroups.current.set(digest, bucket);
+                  setResponseGroupsIdxState(responseGroupsIdx.current);
                 }
 
                 return (
