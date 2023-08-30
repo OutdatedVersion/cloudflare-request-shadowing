@@ -49,7 +49,7 @@ export const loader = async ({ request }: LoaderArgs) => {
   return defer({
     divergences,
     aggregation: fetch(
-      `https://request-shadowing-demo.bwatkins.dev/mirrors/aggregation?lookbackPeriodHours=${lookback}`,
+      `https://request-shadowing-demo.bwatkins.dev/mirrors/aggregation?lookbackPeriodHours=${lookback}&rollupPeriodMinutes=1`,
       {
         headers: {
           authorization: 'idk scurvy-reuse-bulldozer',
