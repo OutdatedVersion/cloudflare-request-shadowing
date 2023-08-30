@@ -215,7 +215,9 @@ export default {
         .selectFrom("requests")
         .selectAll()
         .orderBy("created_at", "desc")
-        .limit(50);
+        .limit(
+          Math.min(250, parseInt(url.searchParams.get("limit") ?? "50", 10))
+        );
 
       const param = url.searchParams.get("divergent")?.toLowerCase();
       if (param === "" || param === "true") {
