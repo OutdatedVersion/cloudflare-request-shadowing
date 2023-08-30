@@ -247,7 +247,7 @@ export default function MirrorsList() {
                               num +
                               (req.digestEmoji === curr.digestEmoji ? 1 : 0),
                             0,
-                          )} ${req.digestEmoji}s total`}
+                          )} ${req.digestEmoji} total`}
                         >
                           {req.digestEmoji}
                         </span>
