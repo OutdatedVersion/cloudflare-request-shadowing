@@ -1,6 +1,8 @@
+// @ts-check
+// Testing Prism highlighting ideas
+
 import assert from 'node:assert';
 
-// @ts-check
 const { rows } = {
   rows: [
     {
