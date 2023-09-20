@@ -28,10 +28,10 @@ export const useDatadogRum = () => {
 
     import('@datadog/browser-rum').then(({ datadogRum }) => {
       datadogRum.init({
-        applicationId: 'd7972898-a384-45e2-aca0-3d88fa6f0730',
-        clientToken: 'pub9c239a8430cb5d0453eac3df419c0d49',
+        applicationId: '',
+        clientToken: '',
         site: 'datadoghq.com',
-        service: 'request-mirroring',
+        service: 'request-shadowing',
         env: 'dev',
         version: '1.0.0',
         sessionSampleRate: 100,

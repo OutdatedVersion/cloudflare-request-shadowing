@@ -1,4 +1,4 @@
-name = "request-mirroring-api"
+name = "request-shadowing-api"
 main = "src/worker.ts"
 compatibility_date = "2023-08-21"
 node_compat = true
@@ -8,7 +8,7 @@ workers_dev = true
 mode = "smart"
 
 [vars]
-DB_USERNAME = "postgresroot"
-DB_HOST = "development-request-mirroring.cluster-c4l307anqk2y.us-west-2.rds.amazonaws.com"
+DB_USERNAME = ""
+DB_HOST = ""
 DB_PORT = "5432"
-DB_NAME = "request_mirroring"
+DB_NAME = "request_shadowing"

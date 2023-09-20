@@ -84,25 +84,14 @@ const attempt = async <T, Err = Error>(fn: () => T | Promise<T>) => {
 };
 
 const getConfig = (url: URL): ShadowingConfig | undefined => {
-  if (url.pathname === "/loanaccountingapi/loandetails") {
+  if (url.pathname === "/jaja/one") {
     return {
       targets: [
         {
-          url: "https://development.nelnet.io/loan-details-aggregator/loan-details",
-          timeout: 15,
-          statuses: [200],
-          sampleRate: 0.5,
-        },
-      ],
-    };
-  } else if (url.pathname === "/bwatkins-test/health") {
-    return {
-      targets: [
-        {
-          url: "https://development.nelnet.io/bwatkins-test/testing",
+          url: "https://bwatkins.dev/jaja/two",
           timeout: 5,
           statuses: [200],
-          sampleRate: 1,
+          sampleRate: 1.0,
         },
       ],
     };
@@ -173,7 +162,7 @@ const shadow = async (
   } catch (error) {
     ac.abort();
     console.error(`Failed to shadow '${to}'`, error);
-    // TODO handle error
+    // TODO: what else could we do with this?
     return;
   }
   const duration = Date.now() - start;
@@ -192,7 +181,7 @@ const shadow = async (
     return;
   }
 
-  // TODO: 204
+  // TODO: 204?
   const a = await getResponseBody(control);
   const b = await getResponseBody(shadowed);
 

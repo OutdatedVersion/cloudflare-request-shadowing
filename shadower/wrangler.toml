@@ -1,4 +1,4 @@
-name = "request-mirroring"
+name = "request-shadowing"
 main = "src/worker.ts"
 compatibility_date = "2023-08-14"
 node_compat = true
@@ -6,15 +6,14 @@ logpush = false
 
 workers_dev = false
 routes = [
-  { pattern = "development.nelnet.io/bwatkins-test/health*", zone_name = "development.nelnet.io" },
-  { pattern = "development.nelnet.io/loanaccountingapi/loandetails*", zone_name = "development.nelnet.io" },
+  { pattern = "bwatkins.dev/jaja/one*", zone_name = "bwatkins.dev" },
 ]
 
 [placement]
 mode = "smart"
 
 [vars]
-DB_USERNAME = "postgresroot"
-DB_HOST = "development-request-mirroring.cluster-c4l307anqk2y.us-west-2.rds.amazonaws.com"
+DB_USERNAME = ""
+DB_HOST = ""
 DB_PORT = "5432"
-DB_NAME = "request_mirroring"
+DB_NAME = "request_shadowing"
