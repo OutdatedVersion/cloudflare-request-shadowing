@@ -5,8 +5,11 @@
   "scripts": {
     "build": "remix build",
     "dev": "remix dev --manual -c \"npm run start\"",
-    "start": "TZ=UTC wrangler pages dev --compatibility-date=2023-06-21 ./public",
-    "typecheck": "tsc"
+    "start": "TZ=UTC wrangler pages dev --compatibility-flags=nodejs_compat --compatibility-date=2023-06-21 ./public",
+    "typecheck": "tsc",
+    "predeploy": "npm run build",
+    "deploy": "wrangler pages deploy --project-name request-mirroring --branch main --commit-dirty=true public",
+    "tail": "wrangler pages deployment tail --project-name request-mirroring"
   },
   "dependencies": {
     "@datadog/browser-rum": "^4.47.0",
