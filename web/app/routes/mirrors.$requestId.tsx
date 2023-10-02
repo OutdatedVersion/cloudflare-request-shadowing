@@ -80,10 +80,10 @@ export default function MirroredRequest() {
 
             <div className="mt-14">
               <p>
-                <span className="bg-red-300">Red</span> is control
+                <span className="bg-green-300">Green</span> is control
               </p>
               <p>
-                <span className="bg-green-300">Green</span> is mirrored
+                <span className="bg-red-300">Red</span> is mirrored
               </p>
             </div>
 

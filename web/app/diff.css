@@ -25,7 +25,7 @@ ul.jsondiffpatch-delta {
 .jsondiffpatch-added .jsondiffpatch-value pre,
 .jsondiffpatch-modified .jsondiffpatch-right-value pre,
 .jsondiffpatch-textdiff-added {
-  background: #bbffbb;
+  background: rgb(248 113 113);
   border-radius: 0.15rem;
 }
 @media (prefers-color-scheme: dark) {
@@ -34,7 +34,7 @@ ul.jsondiffpatch-delta {
   .jsondiffpatch-modified .jsondiffpatch-right-value pre,
   .jsondiffpatch-textdiff-added {
     /* bg-green-400 */
-    background: rgb(74 222 128);
+    background: rgb(248 113 113);
     border-radius: 0.15rem;
     color: white;
   }
@@ -44,7 +44,7 @@ ul.jsondiffpatch-delta {
 .jsondiffpatch-deleted pre,
 .jsondiffpatch-modified .jsondiffpatch-left-value pre,
 .jsondiffpatch-textdiff-deleted {
-  background: #ffbbbb;
+  background: rgb(74 222 128);
   border-radius: 0.15rem;
 }
 @media (prefers-color-scheme: dark) {
@@ -53,7 +53,7 @@ ul.jsondiffpatch-delta {
   .jsondiffpatch-modified .jsondiffpatch-left-value pre,
   .jsondiffpatch-textdiff-deleted {
     /* bg-red-400 */
-    background: rgb(248 113 113);
+    background: rgb(74 222 128);
     border-radius: 0.15rem;
     color: white;
   }
