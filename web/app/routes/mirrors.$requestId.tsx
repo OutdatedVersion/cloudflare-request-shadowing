@@ -2,9 +2,13 @@ import { type LoaderArgs, json, defer } from '@remix-run/cloudflare';
 import { Await, useLoaderData, useOutletContext } from '@remix-run/react';
 import format from 'date-fns/format';
 import parseISO from 'date-fns/parseISO';
-import { Suspense, useEffect, useState } from 'react';
+import { type ReactNode, Suspense, useEffect, useState } from 'react';
 import type { Mirror } from '~/types';
 import { create, formatters } from 'jsondiffpatch';
+import {
+  ClipboardDocumentIcon,
+  ClipboardDocumentCheckIcon,
+} from '@heroicons/react/24/outline';
 
 import '~/diff.css';
 
@@ -42,6 +46,32 @@ export const loader = async ({ params }: LoaderArgs) => {
       .then((resp) => resp.json() as { data?: Mirror })
       .then((resp) => resp.data),
   });
+};
+
+const CopyToClipboard = ({
+  getText,
+  children,
+}: {
+  children: ReactNode;
+  getText: () => string;
+}) => {
+  const [done, setDone] = useState<boolean>();
+
+  const onClick = () => {
+    const text = getText();
+    navigator.clipboard.writeText(text);
+    setDone(true);
+    setTimeout(() => setDone(false), 750);
+  };
+
+  return (
+    <button
+      className="btn btn-primary btn-sm w-full p-0.5 normal-case"
+      onClick={onClick}
+    >
+      {done ? <ClipboardDocumentCheckIcon className="h-5 w-5" /> : children}
+    </button>
+  );
 };
 
 export default function MirroredRequest() {
@@ -99,18 +129,53 @@ export default function MirroredRequest() {
               </label>
             </div>
 
-            <div
-              className="font-mono bg-base-300 p-3 w-fit rounded-sm"
-              dangerouslySetInnerHTML={{
-                __html: formatters.html.format(
-                  diff.diff(
+            <div className="font-mono bg-base-300 p-3 w-fit rounded-sm relative">
+              <div className="float-right absolute top-0 right-0">
+                <div className="dropdown dropdown-bottom dropdown-end dropdown-hover">
+                  <label tabIndex={0} className="m-1 btn btn-ghost">
+                    <ClipboardDocumentIcon className="h-5 w-5" />
+                  </label>
+                  <div
+                    tabIndex={0}
+                    className="dropdown-content z-[1] p-2 shadow bg-base-100 rounded-box w-52 grid gap-2"
+                  >
+                    <CopyToClipboard
+                      getText={() =>
+                        JSON.stringify(
+                          JSON.parse(mirror.control.response),
+                          null,
+                          2,
+                        )
+                      }
+                    >
+                      Control response
+                    </CopyToClipboard>
+                    <CopyToClipboard
+                      getText={() =>
+                        JSON.stringify(
+                          JSON.parse(mirror.shadows[0].response),
+                          null,
+                          2,
+                        )
+                      }
+                    >
+                      Shadow response
+                    </CopyToClipboard>
+                  </div>
+                </div>
+              </div>
+              <div
+                dangerouslySetInnerHTML={{
+                  __html: formatters.html.format(
+                    diff.diff(
+                      JSON.parse(mirror.control.response),
+                      JSON.parse(mirror.shadows[0].response),
+                    )!,
                     JSON.parse(mirror.control.response),
-                    JSON.parse(mirror.shadows[0].response),
-                  )!,
-                  JSON.parse(mirror.control.response),
-                ),
-              }}
-            />
+                  ),
+                }}
+              />
+            </div>
           </div>
         )}
       />
