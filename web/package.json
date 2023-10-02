@@ -21,7 +21,6 @@
     "date-fns": "^2.30.0",
     "isbot": "^3.6.8",
     "jsondiffpatch": "^0.4.1",
-    "pg": "^8.11.3",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-syntax-highlighter": "^15.5.0",
