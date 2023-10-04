@@ -9,6 +9,7 @@ import {
   ClipboardDocumentIcon,
   ClipboardDocumentCheckIcon,
 } from '@heroicons/react/24/outline';
+import { quote as shellQuote } from 'shell-quote';
 
 import '~/diff.css';
 
@@ -46,6 +47,27 @@ export const loader = async ({ params }: LoaderArgs) => {
       .then((resp) => resp.json() as { data?: Mirror })
       .then((resp) => resp.data),
   });
+};
+
+const getCurlCommand = ({ control }: Mirror) => {
+  const headers = Object.entries(control.request.headers)
+    // TODO: is it even safe for the browser to get these headers?
+    .filter(([k]) => !['true-client-ip', 'cf-connecting-ip'].includes(k))
+    .map(([k, v]) => `-H '${k}: ${v}'`)
+    .join(' ');
+
+  let cmd = `curl -X ${shellQuote([
+    control.request.method,
+  ])} ${headers} ${shellQuote([control.url])}`;
+
+  // We want the reproduction command to be as close as possible to the original request
+  // Though the original client likely has a different gzip distribution than our user
+  // this at least exercise's the server's compression subsystem in-case it is the issue.
+  if (control.request.headers['accept-encoding'].indexOf('gzip') > -1) {
+    cmd += ' | gzip -d';
+  }
+
+  return cmd;
 };
 
 const CopyToClipboard = ({
@@ -160,6 +182,9 @@ export default function MirroredRequest() {
                       }
                     >
                       Shadow response
+                    </CopyToClipboard>
+                    <CopyToClipboard getText={() => getCurlCommand(mirror)}>
+                      As cURL
                     </CopyToClipboard>
                   </div>
                 </div>
