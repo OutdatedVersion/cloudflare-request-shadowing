@@ -12,7 +12,7 @@ type ShadowingConfig = {
 type ShadowingTarget = {
   url: string;
   timeout: number;
-  statuses: number[];
+  statuses?: number[];
   sampleRate: number;
 };
 
@@ -172,7 +172,10 @@ const shadow = async (
     status: shadowed.status,
   });
 
-  if (!config.targets[0].statuses.includes(shadowed.status)) {
+  if (
+    config.targets[0].statuses &&
+    !config.targets[0].statuses.includes(shadowed.status)
+  ) {
     console.error(
       `Not saving as '${
         shadowed.status
