@@ -127,12 +127,6 @@ const shadow = async (
   control: Response,
   controlDuration: number,
 ) => {
-  const databaseClientStart = Date.now();
-  const client = await getClient(env);
-  console.log("Opened database connection", {
-    duration: Date.now() - databaseClientStart,
-  });
-
   const to = new URL(config.targets[0].url);
   to.search = new URL(request.url).search;
 
@@ -208,6 +202,11 @@ const shadow = async (
   const divergent = summary.added > 0 || summary.removed > 0;
 
   console.log("Trying to save");
+  const databaseClientStart = Date.now();
+  const client = await getClient(env);
+  console.log("Opened database connection", {
+    duration: Date.now() - databaseClientStart,
+  });
   const databaseStart = Date.now();
   await client.query(
     "INSERT INTO requests (id, divergent, control, shadows) VALUES (gen_random_uuid(), $1, $2, $3);",
