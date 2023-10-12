@@ -125,7 +125,8 @@ const shadow = async (
   env: Env,
   request: Request,
   control: Response,
-  controlDuration: number,
+  controlStartedAt: number,
+  controlEndedAt: number
 ) => {
   const to = new URL(config.targets[0].url);
   to.search = new URL(request.url).search;
@@ -159,10 +160,10 @@ const shadow = async (
     // TODO: what else could we do with this?
     return;
   }
-  const duration = Date.now() - start;
+  const end = Date.now();
 
   console.log(`Shadowed to '${to}'`, {
-    duration,
+    duration: end - start,
     status: shadowed.status,
   });
 
@@ -214,7 +215,9 @@ const shadow = async (
       divergent,
       JSON.stringify({
         url: control.url,
-        duration: controlDuration,
+        duration: controlEndedAt - controlStartedAt,
+        startedAt: controlStartedAt,
+        endedAt: controlEndedAt,
         status: control.status,
         request: {
           method: request.method,
@@ -225,7 +228,9 @@ const shadow = async (
       JSON.stringify([
         {
           url: shadowed.url,
-          duration,
+          duration: end - start,
+          startedAt: start,
+          endedAt: end,
           status: shadowed.status,
           diff: {
             ...summary,
@@ -253,7 +258,7 @@ export default {
 
     const start = Date.now();
     const res = await fetch(request);
-    const total = Date.now() - start;
+    const end = Date.now();
     if (config && config.targets.length >= 1) {
       const { sampleRate } = config.targets[0];
       if (sampleRate !== 1 && Math.random() < sampleRate) {
@@ -267,7 +272,7 @@ export default {
         return res;
       }
 
-      ctx.waitUntil(shadow(config, env, request.clone(), res.clone(), total));
+      ctx.waitUntil(shadow(config, env, request.clone(), res.clone(), start, end));
     }
     return res;
   },
