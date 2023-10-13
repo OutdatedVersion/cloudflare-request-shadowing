@@ -32,7 +32,7 @@ export const loader = async ({ request }: LoaderArgs) => {
     `https://request-mirroring-api.nelnetvelocity.workers.dev/mirrors?divergent&limit=${limit}`,
     {
       headers: {
-        authorization: 'idk scurvy-reuse-bulldozer',
+        authorization: 'Bearer scurvy-reuse-bulldozer',
       },
     },
   )
@@ -52,7 +52,7 @@ export const loader = async ({ request }: LoaderArgs) => {
       `https://request-mirroring-api.nelnetvelocity.workers.dev/mirrors/aggregation?lookbackPeriodHours=${lookback}&rollupPeriodMinutes=1`,
       {
         headers: {
-          authorization: 'idk scurvy-reuse-bulldozer',
+          authorization: 'Bearer scurvy-reuse-bulldozer',
         },
       },
     )

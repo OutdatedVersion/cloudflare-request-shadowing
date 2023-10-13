@@ -42,7 +42,7 @@ export const loader = async ({ params }: LoaderArgs) => {
       `https://request-mirroring-api.nelnetvelocity.workers.dev/mirrors/${requestId}`,
       {
         headers: {
-          authorization: 'idk scurvy-reuse-bulldozer',
+          authorization: 'Bearer scurvy-reuse-bulldozer',
         },
       },
     )
