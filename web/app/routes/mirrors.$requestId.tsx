@@ -42,7 +42,7 @@ export const loader = async ({ params }: LoaderArgs) => {
       `https://request-shadowing-demo.bwatkins.dev/mirrors/${requestId}`,
       {
         headers: {
-          authorization: 'idk scurvy-reuse-bulldozer',
+          authorization: 'Bearer scurvy-reuse-bulldozer',
         },
       },
     )
