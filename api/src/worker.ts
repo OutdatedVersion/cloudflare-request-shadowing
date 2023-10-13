@@ -1,3 +1,5 @@
+import { Hono } from "hono";
+import { bearerAuth } from "hono/bearer-auth";
 import { Pool } from "pg";
 import set from "date-fns/set";
 import subMinutes from "date-fns/subMinutes";
@@ -6,23 +8,14 @@ import isBefore from "date-fns/isBefore";
 import isAfter from "date-fns/isAfter";
 import z from "zod";
 
-export interface Env {
+export interface IdkEnv {
   DB_USERNAME: string;
   DB_PASSWORD: string;
   DB_HOST: string;
   DB_PORT: string;
   DB_NAME: string;
+  [other: string]: string;
 }
-
-const json = (data: unknown, init?: ResponseInit) => {
-  return new Response(JSON.stringify(data), {
-    ...init,
-    headers: {
-      "content-type": "application/json",
-      ...init?.headers,
-    },
-  });
-};
 
 const serverTiming = (
   entries: Array<{ name: string; dur: number | string; desc?: string }>
@@ -107,133 +100,123 @@ type CoolDatabase = {
   requests: RequestTable;
 };
 
-export default {
-  async fetch(
-    request: Request,
-    env: Env,
-    ctx: ExecutionContext
-  ): Promise<Response> {
-    // TODO: forward JWT from Cloudflare Access and validate that?
-    // https://developers.cloudflare.com/cloudflare-one/identity/authorization-cookie/validating-json/
-    const encoder = new TextEncoder();
-    const pw = encoder.encode("scurvy-reuse-bulldozer");
-
-    const auth = request.headers.get("authorization");
-    const key = auth?.split(" ")[1];
-    if (!key || !crypto.subtle.timingSafeEqual(pw, encoder.encode(key))) {
-      return json(
-        {
-          message: "missing or incorrect 'authorization' header",
-        },
-        {
-          status: 401,
-        }
-      );
-    }
-
-    const url = new URL(request.url);
-    const match = new URLPattern({
-      pathname: "/mirrors/:id([0-9a-fA-F-]{36}|aggregation)?",
-    }).exec(url);
-
-    if (!match) {
-      return json(
-        { message: `No route for '${url.pathname}'` },
-        {
-          status: 404,
-        }
-      );
-    }
-
-    const db = new Kysely<CoolDatabase>({
-      dialect: new PostgresDialect({
-        pool: new Pool({
-          max: 1,
-          user: env.DB_USERNAME,
-          password: env.DB_PASSWORD,
-          host: env.DB_HOST,
-          port: parseInt(env.DB_PORT, 10),
-          database: env.DB_NAME,
-        }),
+const getDatabase = (env: IdkEnv) => {
+  return new Kysely<CoolDatabase>({
+    dialect: new PostgresDialect({
+      pool: new Pool({
+        max: 1,
+        user: env.DB_USERNAME,
+        password: env.DB_PASSWORD,
+        host: env.DB_HOST,
+        port: parseInt(env.DB_PORT, 10),
+        database: env.DB_NAME,
       }),
-    });
-
-    if (url.pathname === "/mirrors/aggregation") {
-      const start = Date.now();
-      const data = await getMirrorAggregation(db, {
-        rollupPeriodMinutes: parseInt(
-          url.searchParams.get("rollupPeriodMinutes") ?? "30",
-          10
-        ),
-        lookbackPeriodHours: parseInt(
-          url.searchParams.get("lookbackPeriodHours") ?? "4",
-          10
-        ),
-      });
-
-      return json(
-        {
-          data,
-        },
-        {
-          headers: {
-            ...serverTiming([{ name: "query", dur: Date.now() - start }]),
-          },
-        }
-      );
-    }
-
-    const { id } = match.pathname.groups;
-
-    if (id) {
-      const start = Date.now();
-      const rows = await db
-        .selectFrom("requests")
-        .selectAll()
-        .where("id", "=", id)
-        .limit(1)
-        .execute();
-
-      if (rows.length === 0) {
-        throw json(
-          { message: "No such mirror", data: { id } },
-          { status: 404 }
-        );
-      }
-
-      return json(
-        { data: rows[0] },
-        {
-          headers: {
-            ...serverTiming([{ name: "query", dur: Date.now() - start }]),
-          },
-        }
-      );
-    } else {
-      const start = Date.now();
-      let query = db
-        .selectFrom("requests")
-        .selectAll()
-        .orderBy("created_at", "desc")
-        .limit(
-          Math.min(250, parseInt(url.searchParams.get("limit") ?? "50", 10))
-        );
-
-      const param = url.searchParams.get("divergent")?.toLowerCase();
-      if (param === "" || param === "true") {
-        query = query.where("divergent", "is", true);
-      }
-
-      return json(
-        {
-          data: await query.execute(),
-        },
-        {
-          headers: {
-            ...serverTiming([{ name: "query", dur: Date.now() - start }]),
-          },
-        }
-      );
-    }
-  },
+    }),
+  });
 };
+
+const router = new Hono<{
+  Bindings: IdkEnv;
+}>();
+
+router.onError((error, ctx) => {
+  console.error("uncaught error", error);
+  return ctx.json(
+    {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    },
+    {
+      status: 500,
+    }
+  );
+});
+
+// TODO: forward JWT from Cloudflare Access and validate that?
+// https://developers.cloudflare.com/cloudflare-one/identity/authorization-cookie/validating-json/
+router.use("*", bearerAuth({ token: "scurvy-reuse-bulldozer" }));
+
+router.get("/mirrors/aggregation", async (ctx) => {
+  const url = new URL(ctx.req.url);
+
+  const start = Date.now();
+  const data = await getMirrorAggregation(getDatabase(ctx.env), {
+    rollupPeriodMinutes: parseInt(
+      url.searchParams.get("rollupPeriodMinutes") ?? "30",
+      10
+    ),
+    lookbackPeriodHours: parseInt(
+      url.searchParams.get("lookbackPeriodHours") ?? "4",
+      10
+    ),
+  });
+
+  return ctx.json(
+    {
+      data,
+    },
+    {
+      headers: {
+        ...serverTiming([{ name: "query", dur: Date.now() - start }]),
+      },
+    }
+  );
+});
+
+router.get("/mirrors", async (ctx) => {
+  const url = new URL(ctx.req.url);
+  const start = Date.now();
+  let query = getDatabase(ctx.env)
+    .selectFrom("requests")
+    .selectAll()
+    .orderBy("created_at", "desc")
+    .limit(Math.min(250, parseInt(url.searchParams.get("limit") ?? "50", 10)));
+
+  const param = url.searchParams.get("divergent")?.toLowerCase();
+  if (param === "" || param === "true") {
+    query = query.where("divergent", "is", true);
+  }
+
+  return ctx.json(
+    {
+      data: await query.execute(),
+    },
+    {
+      headers: {
+        ...serverTiming([{ name: "query", dur: Date.now() - start }]),
+      },
+    }
+  );
+});
+
+router.get("/mirrors/:id", async (ctx) => {
+  const id = ctx.req.param("id");
+
+  const rows = await getDatabase(ctx.env)
+    .selectFrom("requests")
+    .selectAll()
+    .where("id", "=", id)
+    .limit(1)
+    .execute();
+
+  const start = Date.now();
+
+  if (rows.length === 0) {
+    return ctx.json(
+      { message: "No such mirror", data: { id } },
+      { status: 404 }
+    );
+  }
+
+  return ctx.json(
+    { data: rows[0] },
+    {
+      headers: {
+        ...serverTiming([{ name: "query", dur: Date.now() - start }]),
+      },
+    }
+  );
+});
+
+export default router;
