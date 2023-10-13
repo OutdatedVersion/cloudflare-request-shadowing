@@ -193,16 +193,15 @@ router.get("/mirrors", async (ctx) => {
 router.get("/mirrors/:id", async (ctx) => {
   const id = ctx.req.param("id");
 
-  const rows = await getDatabase(ctx.env)
+  const start = Date.now();
+  const mirror = await getDatabase(ctx.env)
     .selectFrom("requests")
     .selectAll()
     .where("id", "=", id)
     .limit(1)
-    .execute();
+    .executeTakeFirst();
 
-  const start = Date.now();
-
-  if (rows.length === 0) {
+  if (!mirror) {
     return ctx.json(
       { message: "No such mirror", data: { id } },
       { status: 404 }
@@ -210,7 +209,7 @@ router.get("/mirrors/:id", async (ctx) => {
   }
 
   return ctx.json(
-    { data: rows[0] },
+    { data: mirror },
     {
       headers: {
         ...serverTiming([{ name: "query", dur: Date.now() - start }]),
