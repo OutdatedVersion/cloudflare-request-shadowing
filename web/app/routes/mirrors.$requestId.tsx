@@ -8,6 +8,8 @@ import { create, formatters } from 'jsondiffpatch';
 import {
   ClipboardDocumentIcon,
   ClipboardDocumentCheckIcon,
+  EyeIcon,
+  EyeSlashIcon,
 } from '@heroicons/react/24/outline';
 import { quote as shellQuote } from 'shell-quote';
 
@@ -130,29 +132,31 @@ export default function MirroredRequest() {
               {mirror.control.status} {mirror.control.duration}ms
             </p>
 
-            <div className="mt-14">
-              <p>
-                <span className="bg-green-300">Green</span> is control
-              </p>
-              <p>
-                <span className="bg-red-300">Red</span> is mirrored
-              </p>
-            </div>
+            <div className="mt-10 font-mono bg-base-300 p-3 w-full rounded-sm relative">
+              <div className="mb-2">
+                <p className="px-1 bg-green-300 inline-block">Control</p>
+                <p className="ml-2 px-1 bg-red-300 inline-block">Mirrored</p>
+              </div>
 
-            <div className="form-control w-52">
-              <label className="label cursor-pointer">
-                <span className="label-text">Show similar properties</span>
-                <input
-                  type="checkbox"
-                  checked={showUnchanged}
-                  className="toggle toggle-sm my-4"
-                  onChange={() => setShowUnchanged((prev) => !prev)}
-                />
-              </label>
-            </div>
-
-            <div className="font-mono bg-base-300 p-3 w-fit rounded-sm relative">
               <div className="float-right absolute top-0 right-0">
+                <div
+                  className="tooltip"
+                  data-tip={`${
+                    showUnchanged ? 'Hide' : 'Show'
+                  } similar properties`}
+                >
+                  <button
+                    className="btn btn-ghost"
+                    onClick={() => setShowUnchanged((prev) => !prev)}
+                  >
+                    {showUnchanged ? (
+                      <EyeIcon className="h-5 w-5" />
+                    ) : (
+                      <EyeSlashIcon className="h-5 w-5" />
+                    )}
+                  </button>
+                </div>
+
                 <div className="dropdown dropdown-bottom dropdown-end dropdown-hover">
                   <label tabIndex={0} className="m-1 btn btn-ghost">
                     <ClipboardDocumentIcon className="h-5 w-5" />
