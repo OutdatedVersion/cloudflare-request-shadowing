@@ -97,12 +97,10 @@ export default function MirrorsList() {
   const [mirrorHint, setMirrorHint] = useState<Mirror | null>(null);
 
   // Open the details drawer if someone uses a direct link
-  const scheduled = useRef(false);
   useEffect(() => {
-    if (selectedRequestRoute && !scheduled.current) {
+    if (selectedRequestRoute && drawerTrigger.current?.value === 'off') {
       console.log('Toggling drawer');
       drawerTrigger.current?.click();
-      scheduled.current = !scheduled.current;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
