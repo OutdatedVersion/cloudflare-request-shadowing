@@ -307,6 +307,27 @@ export default function MirroredRequest() {
                 </>
               )}
             </div>
+
+            <div className="mt-10">
+              <div className="overflow-x-auto">
+                <table className="table">
+                  <thead>
+                    <th>Mirrored response header</th>
+                    <th>Value</th>
+                  </thead>
+                  <tbody>
+                    {Object.entries(
+                      (selected ?? mirror).shadows[0].headers,
+                    ).map(([k, v]) => (
+                      <tr key={k}>
+                        <td>{k}</td>
+                        <td>{v}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         )}
       />

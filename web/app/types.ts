@@ -16,6 +16,7 @@ export interface MirrorResponse {
     kept: number;
     patches: Patch[];
   };
+  headers: Record<string, string>;
   response: string;
 }
 
