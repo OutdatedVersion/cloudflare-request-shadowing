@@ -98,7 +98,7 @@ export default function MirrorsList() {
 
   // Open the details drawer if someone uses a direct link
   useEffect(() => {
-    if (selectedRequestRoute && drawerTrigger.current?.value === 'off') {
+    if (selectedRequestRoute && !drawerTrigger.current?.checked) {
       console.log('Toggling drawer');
       drawerTrigger.current?.click();
     }
