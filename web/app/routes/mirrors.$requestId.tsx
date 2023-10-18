@@ -10,8 +10,10 @@ import {
   ClipboardDocumentCheckIcon,
   EyeIcon,
   EyeSlashIcon,
+  ArrowPathIcon,
 } from '@heroicons/react/24/outline';
 import { quote as shellQuote } from 'shell-quote';
+import cn from 'classnames';
 
 import '~/diff.css';
 
@@ -98,13 +100,45 @@ const CopyToClipboard = ({
   );
 };
 
-export default function MirroredRequest() {
-  const { mirror: serverMirror } = useLoaderData<typeof loader>();
-  const { mirrorHint: clientMirrorHint } = useOutletContext<{
-    mirrorHint: Mirror;
-  }>();
-  const [loadingMirror] = useState(clientMirrorHint ?? serverMirror);
+const Row = ({
+  mirror,
+  className,
+  onClick,
+}: {
+  mirror: Mirror;
+  className?: string;
+  onClick?: () => void;
+}) => {
+  return (
+    <tr className={className} onClick={onClick}>
+      <td>{format(parseISO(mirror.created_at), 'Ppp')}</td>
+      <td>{mirror.control.status}</td>
+      <td
+        className={cn({
+          'text-yellow-600': mirror.control.status !== mirror.shadows[0].status,
+        })}
+      >
+        {mirror.shadows[0].status}
+      </td>
+      <td>
+        {mirror.shadows[0].diff.added || mirror.shadows[0].diff.removed ? (
+          <>
+            <span className="font-medium text-green-600">
+              +{mirror.shadows[0].diff.added}
+            </span>
+            <span className="pl-1.5 font-medium text-red-600">
+              -{mirror.shadows[0].diff.removed}
+            </span>
+          </>
+        ) : (
+          '✅'
+        )}
+      </td>
+    </tr>
+  );
+};
 
+const DiffView = ({ mirror }: { mirror: Mirror }) => {
   const [showUnchanged, setShowUnchanged] = useState(true);
   useEffect(() => {
     if (showUnchanged) {
@@ -115,95 +149,153 @@ export default function MirroredRequest() {
   }, [showUnchanged]);
 
   return (
+    <>
+      <div className="mb-2">
+        <p className="px-1 bg-green-300 inline-block">Control</p>
+        <p className="ml-2 px-1 bg-red-300 inline-block">Mirrored</p>
+      </div>
+
+      <div className="float-right absolute top-0 right-0">
+        <div
+          className="tooltip"
+          data-tip={`${showUnchanged ? 'Hide' : 'Show'} similar properties`}
+        >
+          <button
+            className="btn btn-ghost"
+            onClick={() => setShowUnchanged((prev) => !prev)}
+          >
+            {showUnchanged ? (
+              <EyeIcon className="h-5 w-5" />
+            ) : (
+              <EyeSlashIcon className="h-5 w-5" />
+            )}
+          </button>
+        </div>
+
+        <div className="dropdown dropdown-bottom dropdown-end dropdown-hover">
+          <label tabIndex={0} className="m-1 btn btn-ghost">
+            <ClipboardDocumentIcon className="h-5 w-5" />
+          </label>
+          <div
+            tabIndex={0}
+            className="dropdown-content z-[1] p-2 shadow bg-base-100 rounded-box w-52 grid gap-2"
+          >
+            <CopyToClipboard
+              getText={() =>
+                JSON.stringify(JSON.parse(mirror.control.response), null, 2)
+              }
+            >
+              Control response
+            </CopyToClipboard>
+            <CopyToClipboard
+              getText={() =>
+                JSON.stringify(JSON.parse(mirror.shadows[0].response), null, 2)
+              }
+            >
+              Shadow response
+            </CopyToClipboard>
+            <CopyToClipboard getText={() => getCurlCommand(mirror)}>
+              As cURL
+            </CopyToClipboard>
+          </div>
+        </div>
+      </div>
+
+      <div
+        dangerouslySetInnerHTML={{
+          __html: formatters.html.format(
+            diff.diff(
+              JSON.parse(mirror.control.response),
+              JSON.parse(mirror.shadows[0].response),
+            )!,
+            JSON.parse(mirror.control.response),
+          ),
+        }}
+      />
+    </>
+  );
+};
+
+export default function MirroredRequest() {
+  const { mirror: serverMirror } = useLoaderData<typeof loader>();
+  const { mirrorHint: clientMirrorHint } = useOutletContext<{
+    mirrorHint: Mirror;
+  }>();
+  const [loadingMirror] = useState(clientMirrorHint ?? serverMirror);
+
+  const [selected, setSelected] = useState<Mirror>();
+
+  return (
     <Suspense>
       <Await
         resolve={loadingMirror}
         children={(mirror) => (
           <div>
-            <h1 className="text-lg font-bold">
+            <h1 className="inline-block text-lg font-bold">
               {mirror.control.request.method}{' '}
               {new URL(mirror.control.url).pathname +
                 new URL(mirror.control.url).search}
             </h1>
-            <p className="text-md text-neutral-500">
-              {format(parseISO(mirror.created_at), 'Pp')}
-            </p>
-            <p className="text-neutral-400 text-md">
-              {mirror.control.status} {mirror.control.duration}ms
-            </p>
+            <div className="tooltip tooltip-bottom" data-tip={'Replay request'}>
+              <button
+                className="ml-1.5 btn btn-xs btn-secondary"
+                onClick={() => {
+                  fetch(
+                    `https://request-mirroring-api.nelnetvelocity.workers.dev/mirrors/${mirror.id}/replay`,
+                    {
+                      method: 'post',
+                      headers: {
+                        authorization: 'Bearer scurvy-reuse-bulldozer',
+                      },
+                    },
+                  );
+                }}
+              >
+                <ArrowPathIcon className="w-5" />
+              </button>
+            </div>
+
+            <div className="mt-10">
+              <table className="table">
+                <thead>
+                  <th>Sent at</th>
+                  <th>Control status</th>
+                  <th>Shadow status</th>
+                  <th>Changes</th>
+                </thead>
+                <tbody>
+                  {[mirror, ...(mirror.replays ?? [])].map((m, idx) => (
+                    <Row
+                      key={m.id}
+                      mirror={m}
+                      className={cn('cursor-pointer', {
+                        'bg-base-300':
+                          (!selected && idx === 0) || selected?.id === m.id,
+                      })}
+                      onClick={() => {
+                        setSelected(m);
+                      }}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
             <div className="mt-10 font-mono bg-base-300 p-3 w-full rounded-sm relative">
-              <div className="mb-2">
-                <p className="px-1 bg-green-300 inline-block">Control</p>
-                <p className="ml-2 px-1 bg-red-300 inline-block">Mirrored</p>
-              </div>
-
-              <div className="float-right absolute top-0 right-0">
-                <div
-                  className="tooltip"
-                  data-tip={`${
-                    showUnchanged ? 'Hide' : 'Show'
-                  } similar properties`}
-                >
-                  <button
-                    className="btn btn-ghost"
-                    onClick={() => setShowUnchanged((prev) => !prev)}
-                  >
-                    {showUnchanged ? (
-                      <EyeIcon className="h-5 w-5" />
-                    ) : (
-                      <EyeSlashIcon className="h-5 w-5" />
+              {(selected ?? mirror).divergent ? (
+                <DiffView mirror={selected ?? mirror} />
+              ) : (
+                <>
+                  <p>Responses match 🥳</p>
+                  <pre className="mt-2">
+                    {JSON.stringify(
+                      JSON.parse((selected ?? mirror).shadows[0].response),
+                      null,
+                      2,
                     )}
-                  </button>
-                </div>
-
-                <div className="dropdown dropdown-bottom dropdown-end dropdown-hover">
-                  <label tabIndex={0} className="m-1 btn btn-ghost">
-                    <ClipboardDocumentIcon className="h-5 w-5" />
-                  </label>
-                  <div
-                    tabIndex={0}
-                    className="dropdown-content z-[1] p-2 shadow bg-base-100 rounded-box w-52 grid gap-2"
-                  >
-                    <CopyToClipboard
-                      getText={() =>
-                        JSON.stringify(
-                          JSON.parse(mirror.control.response),
-                          null,
-                          2,
-                        )
-                      }
-                    >
-                      Control response
-                    </CopyToClipboard>
-                    <CopyToClipboard
-                      getText={() =>
-                        JSON.stringify(
-                          JSON.parse(mirror.shadows[0].response),
-                          null,
-                          2,
-                        )
-                      }
-                    >
-                      Shadow response
-                    </CopyToClipboard>
-                    <CopyToClipboard getText={() => getCurlCommand(mirror)}>
-                      As cURL
-                    </CopyToClipboard>
-                  </div>
-                </div>
-              </div>
-              <div
-                dangerouslySetInnerHTML={{
-                  __html: formatters.html.format(
-                    diff.diff(
-                      JSON.parse(mirror.control.response),
-                      JSON.parse(mirror.shadows[0].response),
-                    )!,
-                    JSON.parse(mirror.control.response),
-                  ),
-                }}
-              />
+                  </pre>
+                </>
+              )}
             </div>
           </div>
         )}
