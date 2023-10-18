@@ -225,4 +225,59 @@ router.get("/mirrors/:id", async (ctx) => {
   );
 });
 
+router.post("/mirrors/:id/replay", async (ctx) => {
+  const id = ctx.req.param("id");
+
+  const queryStart = Date.now();
+  const mirror = await getDatabase(ctx.env)
+    .selectFrom("requests")
+    .selectAll()
+    .where("id", "=", id)
+    .limit(1)
+    .executeTakeFirst();
+  const queryMs = Date.now() - queryStart;
+
+  if (!mirror) {
+    return ctx.json(
+      { message: "No such mirror", data: { id } },
+      { status: 404 }
+    );
+  }
+
+  // rely on ingest filters to avoid header bomb
+  const headers = Object.fromEntries(
+    Object.entries(mirror.control.request.headers).filter(
+      ([k]) =>
+        ![
+          "x-forwarded-proto",
+          "x-real-ip",
+          "cf-visitor",
+          "cf-ray",
+          "cf-connecting-ip",
+          "cf-ipcountry",
+          "true-client-ip",
+        ].includes(k.toLowerCase())
+    )
+  );
+
+  const start = Date.now();
+  await fetch(mirror.control.url, {
+    method: mirror.control.request.method,
+    headers: {
+      ...headers,
+      "shadowing-parent-id": id,
+    },
+  });
+
+  return ctx.newResponse(null, {
+    status: 202,
+    headers: {
+      ...serverTiming([
+        { name: "query", dur: queryMs },
+        { name: "req", dur: Date.now() - start },
+      ]),
+    },
+  });
+});
+
 export default router;
