@@ -75,14 +75,6 @@ const diff = create({
   },
 });
 
-const attempt = async <T, Err = Error>(fn: () => T | Promise<T>) => {
-  try {
-    return [await fn(), null] as const;
-  } catch (error) {
-    return [null, error as Err] as const;
-  }
-};
-
 const getConfig = (url: URL): ShadowingConfig | undefined => {
   if (url.pathname === "/jaja/one") {
     return {
