@@ -151,8 +151,18 @@ const DiffView = ({ mirror }: { mirror: Mirror }) => {
   return (
     <>
       <div className="mb-2">
-        <p className="px-1 bg-green-300 inline-block">Control</p>
-        <p className="ml-2 px-1 bg-red-300 inline-block">Mirrored</p>
+        <p
+          className="px-1 inline-block dark:text-white"
+          style={{ backgroundColor: 'rgb(74 222 128)' }}
+        >
+          Control
+        </p>
+        <p
+          className="ml-2 px-1 inline-block dark:text-white"
+          style={{ backgroundColor: 'rgb(248 113 113)' }}
+        >
+          Mirrored
+        </p>
       </div>
 
       <div className="float-right absolute top-0 right-0">
