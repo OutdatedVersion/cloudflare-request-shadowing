@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { bearerAuth } from "hono/bearer-auth";
+import { cors } from "hono/cors";
 import { Pool } from "pg";
 import set from "date-fns/set";
 import subMinutes from "date-fns/subMinutes";
@@ -133,6 +134,12 @@ router.onError((error, ctx) => {
   );
 });
 
+router.use(
+  "*",
+  cors({
+    origin: ["https://request-mirroring.pages.dev", "http://localhost:8788"],
+  })
+);
 // TODO: forward JWT from Cloudflare Access and validate that?
 // https://developers.cloudflare.com/cloudflare-one/identity/authorization-cookie/validating-json/
 router.use("*", bearerAuth({ token: "scurvy-reuse-bulldozer" }));
