@@ -117,7 +117,8 @@ const shadow = async (
   request: Request,
   control: Response,
   controlStartedAt: number,
-  controlEndedAt: number
+  controlEndedAt: number,
+  parentId: string | null,
 ) => {
   const to = new URL(config.targets[0].url);
   to.search = new URL(request.url).search;
@@ -194,45 +195,64 @@ const shadow = async (
   const divergent = summary.added > 0 || summary.removed > 0;
 
   console.log("Trying to save");
+
+  const controlData = {
+    url: control.url,
+    duration: controlEndedAt - controlStartedAt,
+    startedAt: controlStartedAt,
+    endedAt: controlEndedAt,
+    status: control.status,
+    request: {
+      method: request.method,
+      headers: Object.fromEntries(request.headers),
+    },
+    response: typeof a === "string" ? a : JSON.stringify(a),
+  };
+  const shadowData = {
+    url: shadowed.url,
+    duration: end - start,
+    startedAt: start,
+    endedAt: end,
+    status: shadowed.status,
+    diff: {
+      ...summary,
+      patches,
+    },
+    headers: Object.fromEntries(shadowed.headers),
+    response: typeof b === "string" ? b : JSON.stringify(b),
+  };
+
   const databaseClientStart = Date.now();
   const client = await getClient(env);
   console.log("Opened database connection", {
     duration: Date.now() - databaseClientStart,
   });
   const databaseStart = Date.now();
-  await client.query(
-    "INSERT INTO requests (id, divergent, control, shadows) VALUES (gen_random_uuid(), $1, $2, $3);",
-    [
-      divergent,
-      JSON.stringify({
-        url: control.url,
-        duration: controlEndedAt - controlStartedAt,
-        startedAt: controlStartedAt,
-        endedAt: controlEndedAt,
-        status: control.status,
-        request: {
-          method: request.method,
-          headers: Object.fromEntries(request.headers),
-        },
-        response: typeof a === "string" ? a : JSON.stringify(a),
-      }),
-      JSON.stringify([
-        {
-          url: shadowed.url,
-          duration: end - start,
-          startedAt: start,
-          endedAt: end,
-          status: shadowed.status,
-          diff: {
-            ...summary,
-            patches,
+
+  if (parentId) {
+    console.log("Recognized as replay", { parentId });
+    await client.query(
+      "UPDATE requests SET replays = COALESCE(replays, '[]'::jsonb) || $2 WHERE id = $1;",
+      [
+        parentId,
+        JSON.stringify([
+          {
+            id: crypto.randomUUID(),
+            created_at: new Date().toISOString(),
+            divergent,
+            control: controlData,
+            shadows: [shadowData],
           },
-          headers: Object.fromEntries(shadowed.headers),
-          response: typeof b === "string" ? b : JSON.stringify(b),
-        },
-      ]),
-    ],
-  );
+        ]),
+      ],
+    );
+  } else {
+    await client.query(
+      "INSERT INTO requests (id, divergent, control, shadows) VALUES (gen_random_uuid(), $1, $2, $3);",
+      [divergent, JSON.stringify(controlData), JSON.stringify([shadowData])],
+    );
+  }
+
   console.log("Saved to database", { duration: Date.now() - databaseStart });
   const databaseCloseStart = Date.now();
   await client.end();
@@ -244,8 +264,15 @@ const shadow = async (
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     const url = new URL(request.url);
-
     const config = getConfig(url);
+
+    const parentId = request.headers.get("shadowing-parent-id");
+
+    const headers = new Headers(request.headers);
+    headers.delete("shadowing-private-id");
+    request = new Request(request, {
+      headers,
+    });
 
     const start = Date.now();
     const res = await fetch(request);
@@ -263,7 +290,9 @@ export default {
         return res;
       }
 
-      ctx.waitUntil(shadow(config, env, request.clone(), res.clone(), start, end));
+      ctx.waitUntil(
+        shadow(config, env, request.clone(), res.clone(), start, end, parentId),
+      );
     }
     return res;
   },

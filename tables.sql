@@ -3,5 +3,6 @@ CREATE TABLE requests(
 	divergent bool,
 	control jsonb,
 	shadows jsonb,
+	replays jsonb,
 	created_at timestamp DEFAULT NOW()
 );
