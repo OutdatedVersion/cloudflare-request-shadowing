@@ -253,6 +253,9 @@ export default function MirrorsList() {
                       <td>
                         {new URL(req.control.url).pathname}
                         {getStatusCodeBadge(req.control.status)}
+                        <div className="ml-2 inline-block badge badge-sm badge-outline badge-info">
+                          {new URL(req.control.url).hostname.split('.')[0]}
+                        </div>
                       </td>
                       <td>
                         {new URL(req.shadows[0].url).pathname}

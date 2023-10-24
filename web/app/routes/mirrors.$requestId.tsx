@@ -241,11 +241,16 @@ export default function MirroredRequest() {
         resolve={loadingMirror}
         children={(mirror) => (
           <div>
+            <div className="block badge badge-info">
+              {new URL(mirror.control.url).hostname}
+            </div>
+
             <h1 className="inline-block text-lg font-bold">
               {mirror.control.request.method}{' '}
               {new URL(mirror.control.url).pathname +
                 new URL(mirror.control.url).search}
             </h1>
+
             <div className="tooltip tooltip-bottom" data-tip={'Replay request'}>
               <button
                 className="ml-1.5 btn btn-xs btn-secondary"
