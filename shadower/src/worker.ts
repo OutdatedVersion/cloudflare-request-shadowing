@@ -4,6 +4,7 @@ import {
   create,
   formatters as diffFormattersIgnore,
 } from "jsondiffpatch";
+import { encrypt, generateKey } from "@local/encryption";
 
 type ShadowingConfig = {
   targets: ShadowingTarget[];
@@ -186,6 +187,9 @@ const shadow = async (
   );
   const divergent = summary.added > 0 || summary.removed > 0;
 
+  console.log("Generating encryption key");
+  const cryptoKey = await generateKey(env.ENCRYPTION_SECRET);
+
   console.log("Trying to save");
 
   const controlData = {
@@ -196,9 +200,15 @@ const shadow = async (
     status: control.status,
     request: {
       method: request.method,
-      headers: Object.fromEntries(request.headers),
+      headers: await encrypt(
+        JSON.stringify(Object.fromEntries(request.headers)),
+        cryptoKey,
+      ),
     },
-    response: typeof a === "string" ? a : JSON.stringify(a),
+    response: await encrypt(
+      typeof a === "string" ? a : JSON.stringify(a),
+      cryptoKey,
+    ),
   };
   const shadowData = {
     url: shadowed.url,
@@ -208,10 +218,17 @@ const shadow = async (
     status: shadowed.status,
     diff: {
       ...summary,
-      patches,
+      paths: patches.map((p) => p.path),
+      patches: await encrypt(JSON.stringify(patches), cryptoKey),
     },
-    headers: Object.fromEntries(shadowed.headers),
-    response: typeof b === "string" ? b : JSON.stringify(b),
+    headers: await encrypt(
+      JSON.stringify(Object.fromEntries(shadowed.headers)),
+      cryptoKey,
+    ),
+    response: await encrypt(
+      typeof b === "string" ? b : JSON.stringify(b),
+      cryptoKey,
+    ),
   };
 
   const databaseClientStart = Date.now();
