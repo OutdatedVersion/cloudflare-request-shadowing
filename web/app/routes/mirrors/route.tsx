@@ -21,7 +21,6 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import type { Mirror } from '~/types';
 import cn from 'classnames';
 
 export const loader = async ({ request }: LoaderArgs) => {
@@ -36,7 +35,29 @@ export const loader = async ({ request }: LoaderArgs) => {
       },
     },
   )
-    .then((resp) => resp.json() as { data?: Mirror[] })
+    .then(
+      (resp) =>
+        resp.json() as {
+          data?: Array<{
+            id: string;
+            divergent: boolean;
+            created_at: string;
+            control: {
+              url: string;
+              status: number;
+            };
+            shadow: {
+              url: string;
+              status: number;
+            };
+            diff: {
+              added: number;
+              removed: number;
+              paths: string[];
+            };
+          }>;
+        },
+    )
     .then((resp) => resp.data);
 
   const lookback = divergences
@@ -94,7 +115,9 @@ export default function MirrorsList() {
     [matches],
   );
 
-  const [mirrorHint, setMirrorHint] = useState<Mirror | null>(null);
+  const [mirrorHint, setMirrorHint] = useState<
+    (typeof divergences)[number] | null
+  >(null);
 
   // Open the details drawer if someone uses a direct link
   useEffect(() => {
@@ -201,9 +224,7 @@ export default function MirrorsList() {
             <tbody>
               {divergences
                 .map((req) => {
-                  const digest = req.shadows[0].diff.patches
-                    .map((d) => d.path)
-                    .join('|');
+                  const digest = req.diff.paths.join('|');
 
                   let bucket = responseGroups.current.get(digest);
                   if (bucket === undefined) {
@@ -258,15 +279,15 @@ export default function MirrorsList() {
                         </div>
                       </td>
                       <td>
-                        {new URL(req.shadows[0].url).pathname}
-                        {getStatusCodeBadge(req.shadows[0].status)}
+                        {new URL(req.shadow.url).pathname}
+                        {getStatusCodeBadge(req.shadow.status)}
                       </td>
                       <td>
                         <span className="font-medium text-green-600">
-                          +{req.shadows[0].diff.added}
+                          +{req.diff.added}
                         </span>
                         <span className="pl-1.5 font-medium text-red-600">
-                          -{req.shadows[0].diff.removed}
+                          -{req.diff.removed}
                         </span>
                       </td>
                     </tr>
