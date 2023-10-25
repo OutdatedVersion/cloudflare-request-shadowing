@@ -13,6 +13,7 @@
     "wrangler": "^3.13.1"
   },
   "dependencies": {
+    "@local/encryption": "file:../encryption",
     "date-fns": "^2.30.0",
     "hono": "^3.7.6",
     "kysely": "^0.26.1",

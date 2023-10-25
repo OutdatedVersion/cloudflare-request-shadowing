@@ -7,7 +7,9 @@ import subMinutes from "date-fns/subMinutes";
 import { Kysely, PostgresDialect, sql } from "kysely";
 import isBefore from "date-fns/isBefore";
 import isAfter from "date-fns/isAfter";
-import z from "zod";
+import { z } from "zod";
+import { requestsTableSchema } from "./schema";
+import { generateKey, decrypt, EncryptedData } from "@local/encryption";
 
 export interface IdkEnv {
   DB_USERNAME: string;
@@ -15,7 +17,12 @@ export interface IdkEnv {
   DB_HOST: string;
   DB_PORT: string;
   DB_NAME: string;
+  ENCRYPTION_SECRET: string;
   [other: string]: string;
+}
+
+interface RequestShadowingDatabase {
+  requests: z.infer<typeof requestsTableSchema>;
 }
 
 const serverTiming = (
@@ -35,7 +42,7 @@ const serverTiming = (
 };
 
 const getMirrorAggregation = async (
-  db: Kysely<CoolDatabase>,
+  db: Kysely<RequestShadowingDatabase>,
   {
     lookbackPeriodHours,
     rollupPeriodMinutes,
@@ -88,21 +95,8 @@ const getMirrorAggregation = async (
     .reverse();
 };
 
-const requestsTableSchema = z.object({
-  id: z.string().uuid(),
-  divergent: z.boolean(),
-  control: z.any(),
-  shadows: z.any(),
-  created_at: z.date(),
-});
-type RequestTable = z.infer<typeof requestsTableSchema>;
-
-type CoolDatabase = {
-  requests: RequestTable;
-};
-
 const getDatabase = (env: IdkEnv) => {
-  return new Kysely<CoolDatabase>({
+  return new Kysely<RequestShadowingDatabase>({
     dialect: new PostgresDialect({
       pool: new Pool({
         max: 1,
@@ -173,10 +167,32 @@ router.get("/mirrors/aggregation", async (ctx) => {
 
 router.get("/mirrors", async (ctx) => {
   const url = new URL(ctx.req.url);
-  const start = Date.now();
+
   let query = getDatabase(ctx.env)
     .selectFrom("requests")
-    .selectAll()
+    .select(["id", "divergent", "created_at"])
+    .select(
+      sql<Array<{ added: number; removed: number; paths: string[] }>>`
+          jsonb_build_object(
+            'added', jsonb_extract_path(shadows, '0', 'diff', 'added'),
+            'removed', jsonb_extract_path(shadows, '0', 'diff', 'removed'),
+            'paths', jsonb_extract_path(shadows, '0', 'diff', 'paths')
+          )`.as("diff")
+    )
+    .select(
+      sql<Array<{ url: string; status: number }>>`
+          jsonb_build_object(
+            'url', jsonb_extract_path(control, 'url'),
+            'status', jsonb_extract_path(control, 'status')
+          )`.as("control")
+    )
+    .select(
+      sql<Array<{ url: string; status: number }>>`
+          jsonb_build_object(
+            'url', jsonb_extract_path(shadows, '0', 'url'),
+            'status', jsonb_extract_path(shadows, '0', 'status')
+          )`.as("shadow")
+    )
     .orderBy("created_at", "desc")
     .limit(Math.min(250, parseInt(url.searchParams.get("limit") ?? "50", 10)));
 
@@ -185,9 +201,12 @@ router.get("/mirrors", async (ctx) => {
     query = query.where("divergent", "is", true);
   }
 
+  const start = Date.now();
+  const result = await query.execute();
+
   return ctx.json(
     {
-      data: await query.execute(),
+      data: result,
     },
     {
       headers: {
@@ -196,6 +215,43 @@ router.get("/mirrors", async (ctx) => {
     }
   );
 });
+
+const decryptMirrorInPlace = async ({
+  mirror,
+  key,
+}: {
+  mirror: Omit<z.infer<typeof requestsTableSchema>, "replays">;
+  key: CryptoKey;
+}) => {
+  mirror.control.response = await decrypt(
+    mirror.control.response as EncryptedData,
+    {
+      key,
+    }
+  );
+  mirror.control.request.headers = JSON.parse(
+    await decrypt(mirror.control.request.headers as EncryptedData, {
+      key,
+    })
+  );
+  mirror.shadows[0].diff.patches = JSON.parse(
+    await decrypt(mirror.shadows[0].diff.patches as EncryptedData, {
+      key,
+    })
+  );
+  mirror.shadows[0].headers = JSON.parse(
+    await decrypt(mirror.shadows[0].headers as EncryptedData, {
+      key,
+    })
+  );
+  mirror.shadows[0].response = await decrypt(
+    mirror.shadows[0].response as EncryptedData,
+    {
+      key,
+    }
+  );
+  return mirror;
+};
 
 router.get("/mirrors/:id", async (ctx) => {
   const id = ctx.req.param("id");
@@ -213,6 +269,29 @@ router.get("/mirrors/:id", async (ctx) => {
       { message: "No such mirror", data: { id } },
       { status: 404 }
     );
+  }
+
+  if (typeof mirror.control.response === "object") {
+    const { key } = await generateKey(ctx.env.ENCRYPTION_SECRET, {
+      saltAsBase64: mirror.control.response.salt,
+    });
+
+    await decryptMirrorInPlace({
+      key,
+      mirror,
+    });
+
+    if (mirror.replays) {
+      for (const replay of mirror.replays) {
+        const encodedSalt = (replay.control.response as EncryptedData).salt;
+        // Since replays are appended one at a time in separate requests they
+        // will always have a different salt preventing reuse.
+        const replayKey = await generateKey(ctx.env.ENCRYPTION_SECRET, {
+          saltAsBase64: encodedSalt,
+        });
+        await decryptMirrorInPlace({ key: replayKey.key, mirror: replay });
+      }
+    }
   }
 
   return ctx.json(
@@ -242,6 +321,17 @@ router.post("/mirrors/:id/replay", async (ctx) => {
       { message: "No such mirror", data: { id } },
       { status: 404 }
     );
+  }
+
+  if (typeof mirror.control.response === "object") {
+    const { key } = await generateKey(ctx.env.ENCRYPTION_SECRET, {
+      saltAsBase64: mirror.control.response.salt,
+    });
+
+    await decryptMirrorInPlace({
+      key,
+      mirror,
+    });
   }
 
   // rely on ingest filters to avoid header bomb
