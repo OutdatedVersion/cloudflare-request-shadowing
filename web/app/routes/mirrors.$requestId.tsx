@@ -14,6 +14,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { quote as shellQuote } from 'shell-quote';
 import cn from 'classnames';
+import type { loader as rootLoader } from './mirrors/route';
 
 import '~/diff.css';
 
@@ -227,11 +228,14 @@ const DiffView = ({ mirror }: { mirror: Mirror }) => {
 };
 
 export default function MirroredRequest() {
-  const { mirror: serverMirror } = useLoaderData<typeof loader>();
-  const { mirrorHint: clientMirrorHint } = useOutletContext<{
-    mirrorHint: Mirror;
+  const { mirror: loadingMirror } = useLoaderData<typeof loader>();
+  const { mirrorHint } = useOutletContext<{
+    mirrorHint:
+      | NonNullable<
+          Awaited<ReturnType<typeof rootLoader>>['data']['divergences']
+        >[number]
+      | undefined;
   }>();
-  const [loadingMirror] = useState(clientMirrorHint ?? serverMirror);
 
   const [selected, setSelected] = useState<Mirror>();
 
