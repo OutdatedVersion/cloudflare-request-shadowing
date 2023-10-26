@@ -15,6 +15,7 @@ type ShadowingTarget = {
   timeout: number;
   statuses?: number[];
   sampleRate: number;
+  tags?: Record<string, string>;
 };
 
 // https://datatracker.ietf.org/doc/html/rfc6902#section-3
@@ -85,6 +86,7 @@ const getConfig = (url: URL): ShadowingConfig | undefined => {
           timeout: 5,
           statuses: [200],
           sampleRate: 1.0,
+          tags: { example: "oh-yeah" },
         },
       ],
     };
@@ -266,8 +268,13 @@ const shadow = async (
     );
   } else {
     await client.query(
-      "INSERT INTO requests (id, divergent, control, shadows) VALUES (gen_random_uuid(), $1, $2, $3);",
-      [divergent, JSON.stringify(controlData), JSON.stringify([shadowData])],
+      "INSERT INTO requests (id, divergent, control, shadows, tags) VALUES (gen_random_uuid(), $1, $2, $3, $4);",
+      [
+        divergent,
+        JSON.stringify(controlData),
+        JSON.stringify([shadowData]),
+        JSON.stringify(config.targets[0].tags),
+      ],
     );
   }
 

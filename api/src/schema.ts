@@ -46,6 +46,7 @@ export const requestsTableSchema = z.object({
   created_at: z.date(),
   control: controlDataSchema,
   shadows: z.array(shadowDataSchema),
+  tags: z.record(z.string(), z.string()).nullable(),
   replays: z
     .array(
       z.object({
@@ -54,7 +55,7 @@ export const requestsTableSchema = z.object({
         divergent: z.boolean(),
         control: controlDataSchema,
         shadows: z.array(shadowDataSchema),
-      })
+      }),
     )
     .nullable(),
 });

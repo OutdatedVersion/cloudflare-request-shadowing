@@ -26,7 +26,7 @@ interface RequestShadowingDatabase {
 }
 
 const serverTiming = (
-  entries: Array<{ name: string; dur: number | string; desc?: string }>
+  entries: Array<{ name: string; dur: number | string; desc?: string }>,
 ) => {
   return {
     "server-timing": entries
@@ -46,23 +46,37 @@ const getMirrorAggregation = async (
   {
     lookbackPeriodHours,
     rollupPeriodMinutes,
-  }: { lookbackPeriodHours: number; rollupPeriodMinutes: number }
+    tags,
+  }: {
+    lookbackPeriodHours: number;
+    rollupPeriodMinutes: number;
+    tags?: Record<string, string[]>;
+  },
 ) => {
-  const incompleteTotals = await db
+  let incompleteTotalsQuery = db
     .selectFrom("requests")
     .select((eb) => eb.fn.count<string>("divergent").as("total"))
     .select(sql<string>`sum(divergent::int)`.as("divergent"))
     .select(
       sql<Date>`date_bin(${`${rollupPeriodMinutes} minutes`}::interval, created_at, now() - ${`${lookbackPeriodHours} hours`}::interval)`.as(
-        "bin"
-      )
+        "bin",
+      ),
     )
     .where(
-      sql`now() - ${`${lookbackPeriodHours} hours`}::interval <= created_at`
-    )
+      sql`now() - ${`${lookbackPeriodHours} hours`}::interval <= created_at`,
+    );
+
+  for (const [tag, values] of Object.entries(tags ?? {})) {
+    incompleteTotalsQuery = incompleteTotalsQuery.where((eb) =>
+      eb.or(values.map((value) => sql`tags ->> ${tag}::text = ${value}::text`)),
+    );
+  }
+
+  incompleteTotalsQuery = incompleteTotalsQuery
     .groupBy("bin")
-    .orderBy("bin", "desc")
-    .execute();
+    .orderBy("bin", "desc");
+
+  const incompleteTotals = await incompleteTotalsQuery.execute();
 
   return Array((lookbackPeriodHours * 60) / rollupPeriodMinutes)
     .fill(undefined)
@@ -72,7 +86,7 @@ const getMirrorAggregation = async (
         {
           seconds: 0,
           milliseconds: 0,
-        }
+        },
       );
       const end = set(subMinutes(new Date(), rollupPeriodMinutes * idx), {
         seconds: 0,
@@ -81,7 +95,7 @@ const getMirrorAggregation = async (
       const bin = subMinutes(start, Math.floor(rollupPeriodMinutes / 2));
 
       const match = incompleteTotals.find(
-        (t) => isBefore(t.bin, end) && isAfter(t.bin, start)
+        (t) => isBefore(t.bin, end) && isAfter(t.bin, start),
       );
 
       return {
@@ -124,7 +138,7 @@ router.onError((error, ctx) => {
     },
     {
       status: 500,
-    }
+    },
   );
 });
 
@@ -132,7 +146,7 @@ router.use(
   "*",
   cors({
     origin: ["https://request-mirroring.pages.dev", "http://localhost:8788"],
-  })
+  }),
 );
 // TODO: forward JWT from Cloudflare Access and validate that?
 // https://developers.cloudflare.com/cloudflare-one/identity/authorization-cookie/validating-json/
@@ -142,15 +156,48 @@ router.get("/mirrors/aggregation", async (ctx) => {
   const url = new URL(ctx.req.url);
 
   const start = Date.now();
+
+  const errors: string[] = [];
+  const tags = (ctx.req.queries().tag ?? [])
+    .filter((entry) => {
+      // Validate tags
+      if (!/^([a-z0-9]+:[a-z0-9]+)$/i.test(entry)) {
+        errors.push(entry);
+        return false;
+      }
+      return true;
+    })
+    .reduce(
+      (entries, entry) => {
+        const [key, value] = entry.toLowerCase().split(":");
+        return {
+          ...entries,
+          [key]: [...(entries[key] ?? []), value],
+        };
+      },
+      {} as Record<string, string[]>,
+    );
+
+  if (errors.length > 0) {
+    return ctx.json(
+      {
+        message: "Malformed tags query. e.g. 'key:value'",
+        data: { malformedTags: errors },
+      },
+      { status: 400 },
+    );
+  }
+
   const data = await getMirrorAggregation(getDatabase(ctx.env), {
     rollupPeriodMinutes: parseInt(
       url.searchParams.get("rollupPeriodMinutes") ?? "30",
-      10
+      10,
     ),
     lookbackPeriodHours: parseInt(
       url.searchParams.get("lookbackPeriodHours") ?? "4",
-      10
+      10,
     ),
+    tags,
   });
 
   return ctx.json(
@@ -161,7 +208,7 @@ router.get("/mirrors/aggregation", async (ctx) => {
       headers: {
         ...serverTiming([{ name: "query", dur: Date.now() - start }]),
       },
-    }
+    },
   );
 });
 
@@ -170,28 +217,28 @@ router.get("/mirrors", async (ctx) => {
 
   let query = getDatabase(ctx.env)
     .selectFrom("requests")
-    .select(["id", "divergent", "created_at"])
+    .select(["id", "divergent", "created_at", "tags"])
     .select(
       sql<Array<{ added: number; removed: number; paths: string[] }>>`
           jsonb_build_object(
             'added', jsonb_extract_path(shadows, '0', 'diff', 'added'),
             'removed', jsonb_extract_path(shadows, '0', 'diff', 'removed'),
             'paths', jsonb_extract_path(shadows, '0', 'diff', 'paths')
-          )`.as("diff")
+          )`.as("diff"),
     )
     .select(
       sql<Array<{ url: string; status: number }>>`
           jsonb_build_object(
             'url', jsonb_extract_path(control, 'url'),
             'status', jsonb_extract_path(control, 'status')
-          )`.as("control")
+          )`.as("control"),
     )
     .select(
       sql<Array<{ url: string; status: number }>>`
           jsonb_build_object(
             'url', jsonb_extract_path(shadows, '0', 'url'),
             'status', jsonb_extract_path(shadows, '0', 'status')
-          )`.as("shadow")
+          )`.as("shadow"),
     )
     .orderBy("created_at", "desc")
     .limit(Math.min(250, parseInt(url.searchParams.get("limit") ?? "50", 10)));
@@ -199,6 +246,43 @@ router.get("/mirrors", async (ctx) => {
   const param = url.searchParams.get("divergent")?.toLowerCase();
   if (param === "" || param === "true") {
     query = query.where("divergent", "is", true);
+  }
+
+  const errors: string[] = [];
+  const tags = (ctx.req.queries().tag ?? [])
+    .filter((entry) => {
+      // Validate tags
+      if (!/^([a-z0-9]+:[a-z0-9]+)$/i.test(entry)) {
+        errors.push(entry);
+        return false;
+      }
+      return true;
+    })
+    .reduce(
+      (entries, entry) => {
+        const [key, value] = entry.toLowerCase().split(":");
+        return {
+          ...entries,
+          [key]: [...(entries[key] ?? []), value],
+        };
+      },
+      {} as Record<string, string[]>,
+    );
+
+  if (errors.length > 0) {
+    return ctx.json(
+      {
+        message: "Malformed tags query. e.g. 'key:value'",
+        data: { malformedTags: errors },
+      },
+      { status: 400 },
+    );
+  }
+
+  for (const [tag, values] of Object.entries(tags ?? {})) {
+    query = query.where((eb) =>
+      eb.or(values.map((value) => sql`tags ->> ${tag}::text = ${value}::text`)),
+    );
   }
 
   const start = Date.now();
@@ -212,7 +296,7 @@ router.get("/mirrors", async (ctx) => {
       headers: {
         ...serverTiming([{ name: "query", dur: Date.now() - start }]),
       },
-    }
+    },
   );
 });
 
@@ -227,28 +311,28 @@ const decryptMirrorInPlace = async ({
     mirror.control.response as EncryptedData,
     {
       key,
-    }
+    },
   );
   mirror.control.request.headers = JSON.parse(
     await decrypt(mirror.control.request.headers as EncryptedData, {
       key,
-    })
+    }),
   );
   mirror.shadows[0].diff.patches = JSON.parse(
     await decrypt(mirror.shadows[0].diff.patches as EncryptedData, {
       key,
-    })
+    }),
   );
   mirror.shadows[0].headers = JSON.parse(
     await decrypt(mirror.shadows[0].headers as EncryptedData, {
       key,
-    })
+    }),
   );
   mirror.shadows[0].response = await decrypt(
     mirror.shadows[0].response as EncryptedData,
     {
       key,
-    }
+    },
   );
   return mirror;
 };
@@ -267,7 +351,7 @@ router.get("/mirrors/:id", async (ctx) => {
   if (!mirror) {
     return ctx.json(
       { message: "No such mirror", data: { id } },
-      { status: 404 }
+      { status: 404 },
     );
   }
 
@@ -300,7 +384,7 @@ router.get("/mirrors/:id", async (ctx) => {
       headers: {
         ...serverTiming([{ name: "query", dur: Date.now() - start }]),
       },
-    }
+    },
   );
 });
 
@@ -319,7 +403,7 @@ router.post("/mirrors/:id/replay", async (ctx) => {
   if (!mirror) {
     return ctx.json(
       { message: "No such mirror", data: { id } },
-      { status: 404 }
+      { status: 404 },
     );
   }
 
@@ -346,8 +430,8 @@ router.post("/mirrors/:id/replay", async (ctx) => {
           "cf-connecting-ip",
           "cf-ipcountry",
           "true-client-ip",
-        ].includes(k.toLowerCase())
-    )
+        ].includes(k.toLowerCase()),
+    ),
   );
 
   const start = Date.now();
