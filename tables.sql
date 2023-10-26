@@ -4,5 +4,6 @@ CREATE TABLE requests(
 	control jsonb,
 	shadows jsonb,
 	replays jsonb,
+    tags jsonb,
 	created_at timestamp DEFAULT NOW()
 );

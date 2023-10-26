@@ -5,6 +5,7 @@ import {
   useLoaderData,
   useMatches,
   useNavigate,
+  useSearchParams,
 } from '@remix-run/react';
 import differenceInHours from 'date-fns/differenceInHours';
 import format from 'date-fns/format';
@@ -22,13 +23,23 @@ import {
   YAxis,
 } from 'recharts';
 import cn from 'classnames';
+import { XMarkIcon } from '@heroicons/react/24/outline';
 
 export const loader = async ({ request }: LoaderArgs) => {
   const url = new URL(request.url);
   const limit = url.searchParams.get('limit') ?? 50;
+  const tags = url.searchParams.getAll('tag');
+
+  const divergencesParams = new URLSearchParams({
+    limit: String(limit),
+    divergent: 'true',
+  });
+  for (const tag of tags) {
+    divergencesParams.append('tag', tag);
+  }
 
   const divergences = await fetch(
-    `https://request-shadowing-demo.bwatkins.dev/mirrors?divergent&limit=${limit}`,
+    `https://request-shadowing-demo.bwatkins.dev/mirrors?${divergencesParams}`,
     {
       headers: {
         authorization: 'Bearer scurvy-reuse-bulldozer',
@@ -42,6 +53,7 @@ export const loader = async ({ request }: LoaderArgs) => {
             id: string;
             divergent: boolean;
             created_at: string;
+            tags: Record<string, string> | null;
             control: {
               url: string;
               status: number;
@@ -60,17 +72,26 @@ export const loader = async ({ request }: LoaderArgs) => {
     )
     .then((resp) => resp.data);
 
-  const lookback = divergences
-    ? differenceInHours(
-        new Date(),
-        parseISO(divergences[divergences.length - 1].created_at),
-      ) + 1
-    : 4;
+  const lookback =
+    divergences && divergences.length > 0
+      ? differenceInHours(
+          new Date(),
+          parseISO(divergences[divergences.length - 1].created_at),
+        ) + 1
+      : 4;
+
+  const aggregationParams = new URLSearchParams({
+    lookbackPeriodHours: String(lookback),
+    rollupPeriodMinutes: '1',
+  });
+  for (const tag of tags) {
+    aggregationParams.append('tag', tag);
+  }
 
   return defer({
     divergences,
     aggregation: fetch(
-      `https://request-shadowing-demo.bwatkins.dev/mirrors/aggregation?lookbackPeriodHours=${lookback}&rollupPeriodMinutes=1`,
+      `https://request-shadowing-demo.bwatkins.dev/mirrors/aggregation?${aggregationParams}`,
       {
         headers: {
           authorization: 'Bearer scurvy-reuse-bulldozer',
@@ -103,6 +124,95 @@ const getStatusCodeBadge = (statusCode: number) => {
         </span>
       );
   }
+};
+
+// Copied from https://stackoverflow.com/a/16348977
+const stringToColor = (str: string) => {
+  let hash = 0;
+  str.split('').forEach((char) => {
+    hash = char.charCodeAt(0) + ((hash << 5) - hash);
+  });
+  let colour = '#';
+  for (let i = 0; i < 3; i++) {
+    const value = (hash >> (i * 8)) & 0xff;
+    colour += value.toString(16).padStart(2, '0');
+  }
+  return colour;
+};
+
+const Tag = ({
+  tag,
+  onRemove,
+}: {
+  tag: string;
+  onRemove?: (tag: string) => void;
+}) => (
+  <div
+    key={tag}
+    className="ml-2 inline-block badge badge"
+    style={{
+      borderColor: stringToColor(tag),
+      backgroundColor: stringToColor(tag),
+      mixBlendMode: 'difference',
+      color: 'white',
+    }}
+  >
+    {tag}
+    {onRemove && (
+      <XMarkIcon className="h-4 inline" onClick={() => onRemove(tag)} />
+    )}
+  </div>
+);
+
+const TagSelector = () => {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [txt, setTxt] = useState('');
+  const [tags, setTags] = useState(
+    Array.from(searchParams.entries()).map(([_, value]) => value),
+  );
+  useEffect(() => {
+    setSearchParams(new URLSearchParams(tags.map((val) => ['tag', val])));
+  }, [tags, setSearchParams, setTxt]);
+  const [error, setError] = useState(undefined as string | undefined);
+
+  const handleRemove = (tag: string) => {
+    setTags(tags.filter((val) => val !== tag));
+  };
+
+  const handleButtonClick = () => {
+    if (!/^([a-z0-9]+:[a-z0-9]+)$/i.test(txt)) {
+      setError(`Invalid tag format: '${txt}'. Expected 'tag:value'.`);
+      return;
+    }
+
+    setTags([...tags, txt]);
+    setTxt('');
+  };
+
+  return (
+    <div className="mb-8">
+      <div className="form-control w-full max-w-s">
+        <input
+          className={cn('input input-bordered w-full max-w-xs', {
+            'input-error': !!error,
+          })}
+          type="text"
+          placeholder="key:value"
+          value={txt}
+          onChange={(e) => setTxt(e.target.value)}
+          onKeyUp={(e) => (e.key === 'Enter' ? handleButtonClick() : undefined)}
+        />
+        {error && (
+          <label className="label">
+            <span className="label-text-alt text-error">{error}</span>
+          </label>
+        )}
+      </div>
+      {tags.map((tag) => (
+        <Tag key={tag} tag={tag} onRemove={handleRemove} />
+      ))}
+    </div>
+  );
 };
 
 export default function MirrorsList() {
@@ -141,6 +251,7 @@ export default function MirrorsList() {
         className="drawer-toggle"
       />
       <div className="drawer-content py-8 mx-4 md:mx-8">
+        <TagSelector />
         <div className="mb-8">
           <Suspense
             fallback={
@@ -274,9 +385,11 @@ export default function MirrorsList() {
                       <td>
                         {new URL(req.control.url).pathname}
                         {getStatusCodeBadge(req.control.status)}
-                        <div className="ml-2 inline-block badge badge-sm badge-outline badge-info">
-                          {new URL(req.control.url).hostname.split('.')[0]}
-                        </div>
+                        {Object.entries(req.tags ?? {})
+                          .map(([key, value]) => `${key}:${value}`)
+                          .map((tag) => (
+                            <Tag key={tag} tag={tag} />
+                          ))}
                       </td>
                       <td>
                         {new URL(req.shadow.url).pathname}
