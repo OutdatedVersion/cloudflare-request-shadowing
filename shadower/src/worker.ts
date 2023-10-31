@@ -7,14 +7,57 @@ import {
 import { encrypt, generateKey } from "@local/encryption";
 
 type ShadowingConfig = {
-  targets: ShadowingTarget[];
-};
-
-type ShadowingTarget = {
+  /**
+   * Absolute URL shadow request is sent to.
+   *
+   * Control request's query parameters will be appended to this.
+   *
+   * @example https://api.bwatkins.dev/new-service
+   */
   url: string;
+
+  /**
+   * Maximum number of seconds the shadow request may take.
+   *
+   * Request will be aborted if >=timeout elapses. Note, this
+   * may leave your server is an undefined state if it does
+   * not handle unexpectedly closed connections.
+   *
+   * @example 5
+   */
   timeout: number;
+
+  /**
+   * Percent of incoming requests to shadow.
+   *
+   * Unsampled requests will not be saved; including the control request.
+   *
+   * @example 100 -- all incoming requests will trigger a shadow
+   * @example 50 -- half of incoming requests will trigger a shadow
+   */
+  percentSampleRate: number;
+
+  /**
+   * Set of HTTP status codes considered a successful shadow.
+   *
+   * If provided and a shadow request does not result in a response
+   * code listed it will be discarded. The control and shadow will not be saved.
+   *
+   * If unset, all status codes are considered successful.
+   *
+   * @example []
+   * @example [200, 404]
+   */
   statuses?: number[];
-  sampleRate: number;
+
+  /**
+   * Generic metadata stored with the control/shadow request.
+   *
+   * You can filter by these tags in the UI and API.
+   *
+   * @example { env: 'production' }
+   * @example { env: 'develop' }
+   */
   tags?: Record<string, string>;
 };
 
@@ -77,10 +120,8 @@ const diff = create({
   },
 });
 
-const getConfig = (url: URL): ShadowingConfig | undefined => {
-  return {
-    targets: [],
-  };
+const getShadowingConfigForUrl = (url: URL): ShadowingConfig | undefined => {
+  return undefined;
 };
 
 const getResponseBody = (res: Response) => {
@@ -114,7 +155,7 @@ const shadow = async (
   controlEndedAt: number,
   parentId: string | null,
 ) => {
-  const to = new URL(config.targets[0].url);
+  const to = new URL(config.url);
   to.search = new URL(request.url).search;
 
   console.log(`Shadowing to '${to}'`);
@@ -136,7 +177,7 @@ const shadow = async (
       new Promise<never>((r, reject) =>
         setTimeout(
           () => reject(new Error("request did not complete")),
-          config.targets[0].timeout * 1000,
+          config.timeout * 1000,
         ),
       ),
     ]);
@@ -153,14 +194,11 @@ const shadow = async (
     status: shadowed.status,
   });
 
-  if (
-    config.targets[0].statuses &&
-    !config.targets[0].statuses.includes(shadowed.status)
-  ) {
+  if (config.statuses && !config.statuses.includes(shadowed.status)) {
     console.error(
-      `Not saving as '${
-        shadowed.status
-      }' is not one of ${config.targets[0].statuses.join(", ")}`,
+      `Not saving as '${shadowed.status}' is not one of ${config.statuses.join(
+        ", ",
+      )}`,
     );
     return;
   }
@@ -263,7 +301,7 @@ const shadow = async (
         divergent,
         JSON.stringify(controlData),
         JSON.stringify([shadowData]),
-        JSON.stringify(config.targets[0].tags),
+        JSON.stringify(config.tags),
       ],
     );
   }
@@ -279,7 +317,7 @@ const shadow = async (
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext) {
     const url = new URL(request.url);
-    const config = getConfig(url);
+    const config = getShadowingConfigForUrl(url);
 
     const parentId = request.headers.get("shadowing-parent-id");
 
@@ -292,11 +330,13 @@ export default {
     const start = Date.now();
     const res = await fetch(request);
     const end = Date.now();
-    if (config && config.targets.length >= 1) {
-      const { sampleRate } = config.targets[0];
-      if (sampleRate !== 1 && Math.random() < sampleRate) {
+    if (config) {
+      if (
+        config.percentSampleRate !== 100 &&
+        Math.random() * 100 < config.percentSampleRate
+      ) {
         console.log(
-          `Skipping shadow due to sample rate (${sampleRate * 100}%)`,
+          `Skipping shadow due to sample rate (${config.percentSampleRate}%)`,
         );
         return res;
       }
