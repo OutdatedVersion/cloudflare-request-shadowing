@@ -146,7 +146,7 @@ const getClient = async (env: Env) => {
   return client;
 };
 
-const shadow = async (
+const triggerAndProcessShadow = async (
   config: ShadowingConfig,
   env: Env,
   request: Request,
@@ -321,6 +321,9 @@ export default {
 
     const parentId = request.headers.get("shadowing-parent-id");
 
+    // It wouldn't hurt much but I don't want to encourage/end up
+    // supporting underlying services acting on this header. So, let's
+    // not leak it in the first place.
     const headers = new Headers(request.headers);
     headers.delete("shadowing-private-id");
     request = new Request(request, {
@@ -348,7 +351,15 @@ export default {
       }
 
       ctx.waitUntil(
-        shadow(config, env, request.clone(), res.clone(), start, end, parentId),
+        triggerAndProcessShadow(
+          config,
+          env,
+          request.clone(),
+          res.clone(),
+          start,
+          end,
+          parentId,
+        ),
       );
     }
 
