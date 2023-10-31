@@ -7,7 +7,6 @@ import {
   useNavigate,
   useSearchParams,
 } from '@remix-run/react';
-import differenceInHours from 'date-fns/differenceInHours';
 import format from 'date-fns/format';
 import formatDistanceToNow from 'date-fns/formatDistanceToNow';
 import parseISO from 'date-fns/parseISO';
@@ -72,16 +71,8 @@ export const loader = async ({ request, context: { env } }: LoaderArgs) => {
     )
     .then((resp) => resp.data);
 
-  const lookback =
-    divergences && divergences.length > 0
-      ? differenceInHours(
-          new Date(),
-          parseISO(divergences[divergences.length - 1].created_at),
-        ) + 1
-      : 4;
-
   const aggregationParams = new URLSearchParams({
-    lookbackPeriodHours: String(lookback),
+    lookbackPeriodHours: '24',
     rollupPeriodMinutes: '1',
   });
   for (const tag of tags) {
@@ -230,7 +221,7 @@ export default function MirrorsList() {
                       allowDataOverflow
                       dataKey="end"
                       tickSize={10}
-                      tickFormatter={(val, idx) =>
+                      tickFormatter={(val) =>
                         format(parseISO(val), 'h:mmaaa')
                       }
                       type="category"
