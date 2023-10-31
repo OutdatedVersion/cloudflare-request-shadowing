@@ -120,10 +120,6 @@ const diff = create({
   },
 });
 
-const getShadowingConfigForUrl = (url: URL): ShadowingConfig | undefined => {
-  return undefined;
-};
-
 const getResponseBody = (res: Response) => {
   const type = res.headers.get("content-type") ?? "";
   if (type.includes("application/json")) {
@@ -311,6 +307,27 @@ const triggerAndProcessShadow = async (
   console.log("Closed database connection", {
     duration: Date.now() - databaseCloseStart,
   });
+};
+
+const getShadowingConfigForUrl = (url: URL): ShadowingConfig | undefined => {
+  // We don't need to check `url.hostname` as your Worker's `routes` configuration
+  // performs precursory filtering
+
+  if (url.pathname === "/jaja/a.json") {
+    return {
+      url: "https://bwatkins.dev/jaja/b.json",
+      percentSampleRate: 100,
+      timeout: 5,
+      tags: {
+        // contrived example though imagine you have `bwatkins.dev` and `api.develop.internal.bwatkins.dev`
+        // you can whatever logic works for your use-case here!
+        env: url.hostname === "bwatkins.dev" ? "production" : "develop",
+        app: "jaja",
+      },
+    };
+  }
+
+  return undefined;
 };
 
 export default {
