@@ -17,7 +17,7 @@ Transparently send requests from one URL to another.
 
 ### First class JSON diffs 👀
 
-![Video](docs/diff.mov)
+![Video](docs/diff.mp4)
 
 ### Export 📋
 
