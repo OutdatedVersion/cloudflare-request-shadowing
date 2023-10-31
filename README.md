@@ -11,7 +11,7 @@ Transparently send requests from one URL to another.
 - Tagging
 
 > [!NOTE]  
-> You'll need to use Cloudflare as a reverse proxy (orange cloud in the dashboard[^1]) to run this!
+> You'll need to use Cloudflare as a reverse proxy[^1] to run this!
 
 ## 📋 / 📸
 
@@ -80,4 +80,6 @@ anything but a dark mode (or to avoid late night *flash bang out*s)
 
 ![Alt text](docs/light-mode.png)
 
-^1: ![abc](docs/image.png)
+[^1]:
+    Verify there is an "orange cloud" on the dashboard for the domain you intend to use.
+    ![See docs/orange-cloud.png for visual](docs/orange-cloud.png)
