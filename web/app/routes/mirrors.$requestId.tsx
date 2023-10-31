@@ -17,6 +17,7 @@ import cn from 'classnames';
 import type { loader as rootLoader } from './mirrors/route';
 
 import '~/diff.css';
+import { Tag } from '~/components/Tag';
 
 const diff = create({
   objectHash: (obj: Record<string, unknown>) => {
@@ -243,11 +244,18 @@ export default function MirroredRequest() {
         resolve={loadingMirror}
         children={(mirror) => (
           <div>
-            <div className="block badge badge-info">
-              {new URL(mirror.control.url).hostname}
+            <div>
+              <div className="badge badge-info inline-block">
+                {new URL(mirror.control.url).hostname}
+              </div>
+
+              {mirror.tags &&
+                Object.entries(mirror.tags).map(([k, v]) => (
+                  <Tag key={k} tag={`${k}:${v}`} />
+                ))}
             </div>
 
-            <h1 className="inline-block text-lg font-bold">
+            <h1 className="inline-block text-xl font-bold mt-2">
               {mirror.control.request.method}{' '}
               {new URL(mirror.control.url).pathname +
                 new URL(mirror.control.url).search}

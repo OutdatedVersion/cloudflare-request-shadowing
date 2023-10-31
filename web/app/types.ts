@@ -34,4 +34,5 @@ export interface Mirror {
   control: MirrorControlResponse;
   shadows: MirrorResponse[];
   replays: Exclude<Mirror, 'replays'>[] | null;
+  tags: Record<string, string> | null;
 }
