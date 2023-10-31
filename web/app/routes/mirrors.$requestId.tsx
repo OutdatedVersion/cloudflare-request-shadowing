@@ -26,7 +26,7 @@ const diff = create({
   },
 });
 
-export const loader = async ({ params }: LoaderArgs) => {
+export const loader = async ({ params, context: { env } }: LoaderArgs) => {
   const { requestId } = params;
 
   if (!requestId) {
@@ -41,14 +41,12 @@ export const loader = async ({ params }: LoaderArgs) => {
   }
 
   return defer({
-    mirror: fetch(
-      `https://request-shadowing-demo.bwatkins.dev/mirrors/${requestId}`,
-      {
-        headers: {
-          authorization: 'Bearer scurvy-reuse-bulldozer',
-        },
+    baseUrl: env.API_BASE_URL,
+    mirror: fetch(`${env.API_BASE_URL}/mirrors/${requestId}`, {
+      headers: {
+        authorization: 'Bearer scurvy-reuse-bulldozer',
       },
-    )
+    })
       .then((resp) => resp.json() as { data?: Mirror })
       .then((resp) => resp.data),
   });
@@ -228,7 +226,7 @@ const DiffView = ({ mirror }: { mirror: Mirror }) => {
 };
 
 export default function MirroredRequest() {
-  const { mirror: loadingMirror } = useLoaderData<typeof loader>();
+  const { mirror: loadingMirror, baseUrl } = useLoaderData<typeof loader>();
   const { mirrorHint } = useOutletContext<{
     mirrorHint:
       | NonNullable<
@@ -259,15 +257,12 @@ export default function MirroredRequest() {
               <button
                 className="ml-1.5 btn btn-xs btn-secondary"
                 onClick={() => {
-                  fetch(
-                    `https://request-mirroring-api.nelnetvelocity.workers.dev/mirrors/${mirror.id}/replay`,
-                    {
-                      method: 'post',
-                      headers: {
-                        authorization: 'Bearer scurvy-reuse-bulldozer',
-                      },
+                  fetch(`${baseUrl}/mirrors/${mirror.id}/replay`, {
+                    method: 'post',
+                    headers: {
+                      authorization: 'Bearer scurvy-reuse-bulldozer',
                     },
-                  );
+                  });
                 }}
               >
                 <ArrowPathIcon className="w-5" />

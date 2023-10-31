@@ -25,7 +25,7 @@ import {
 import cn from 'classnames';
 import { XMarkIcon } from '@heroicons/react/24/outline';
 
-export const loader = async ({ request }: LoaderArgs) => {
+export const loader = async ({ request, context: { env } }: LoaderArgs) => {
   const url = new URL(request.url);
   const limit = url.searchParams.get('limit') ?? 50;
   const tags = url.searchParams.getAll('tag');
@@ -39,7 +39,7 @@ export const loader = async ({ request }: LoaderArgs) => {
   }
 
   const divergences = await fetch(
-    `https://request-shadowing-demo.bwatkins.dev/mirrors?${divergencesParams}`,
+    `${env.API_BASE_URL}/mirrors?${divergencesParams}`,
     {
       headers: {
         authorization: 'Bearer scurvy-reuse-bulldozer',
@@ -91,7 +91,7 @@ export const loader = async ({ request }: LoaderArgs) => {
   return defer({
     divergences,
     aggregation: fetch(
-      `https://request-shadowing-demo.bwatkins.dev/mirrors/aggregation?${aggregationParams}`,
+      `${env.API_BASE_URL}/mirrors/aggregation?${aggregationParams}`,
       {
         headers: {
           authorization: 'Bearer scurvy-reuse-bulldozer',

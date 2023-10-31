@@ -8,6 +8,17 @@ import type { AppLoadContext, EntryContext } from '@remix-run/cloudflare';
 import { RemixServer } from '@remix-run/react';
 import isbot from 'isbot';
 import { renderToReadableStream } from 'react-dom/server';
+import { z } from 'zod';
+
+const serverEnvSchema = z.object({
+  API_BASE_URL: z.string().url(),
+});
+
+declare module '@remix-run/cloudflare' {
+  interface AppLoadContext {
+    env: z.output<typeof serverEnvSchema>;
+  }
+}
 
 export default async function handleRequest(
   request: Request,
@@ -16,6 +27,8 @@ export default async function handleRequest(
   remixContext: EntryContext,
   loadContext: AppLoadContext,
 ) {
+  serverEnvSchema.parse(loadContext.env);
+
   const body = await renderToReadableStream(
     <RemixServer context={remixContext} url={request.url} />,
     {
