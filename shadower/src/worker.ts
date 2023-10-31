@@ -184,7 +184,6 @@ const triggerAndProcessShadow = async (
   } catch (error) {
     ac.abort();
     console.error(`Failed to shadow '${to}'`, error);
-    // TODO handle error
     return;
   }
   const end = Date.now();
