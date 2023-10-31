@@ -330,6 +330,12 @@ export default {
     const start = Date.now();
     const res = await fetch(request);
     const end = Date.now();
+
+    // We don't support shadowing pre-flight requests for now.
+    if (request.method === "OPTIONS") {
+      return res;
+    }
+
     if (config) {
       if (
         config.percentSampleRate !== 100 &&
@@ -341,14 +347,11 @@ export default {
         return res;
       }
 
-      if (request.method === "OPTIONS") {
-        return res;
-      }
-
       ctx.waitUntil(
         shadow(config, env, request.clone(), res.clone(), start, end, parentId),
       );
     }
+
     return res;
   },
 };
