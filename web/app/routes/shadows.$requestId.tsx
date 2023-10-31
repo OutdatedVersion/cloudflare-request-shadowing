@@ -3,7 +3,7 @@ import { Await, useLoaderData, useOutletContext } from '@remix-run/react';
 import format from 'date-fns/format';
 import parseISO from 'date-fns/parseISO';
 import { type ReactNode, Suspense, useEffect, useState } from 'react';
-import type { Mirror } from '~/types';
+import type { Shadow } from '~/types';
 import { create, formatters } from 'jsondiffpatch';
 import {
   ClipboardDocumentIcon,
@@ -14,7 +14,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { quote as shellQuote } from 'shell-quote';
 import cn from 'classnames';
-import type { loader as rootLoader } from './mirrors/route';
+import type { loader as rootLoader } from './shadows/route';
 
 import '~/diff.css';
 import { Tag } from '~/components/Tag';
@@ -43,17 +43,17 @@ export const loader = async ({ params, context: { env } }: LoaderArgs) => {
 
   return defer({
     baseUrl: env.API_BASE_URL,
-    mirror: fetch(`${env.API_BASE_URL}/mirrors/${requestId}`, {
+    mirror: fetch(`${env.API_BASE_URL}/shadows/${requestId}`, {
       headers: {
         authorization: 'Bearer scurvy-reuse-bulldozer',
       },
     })
-      .then((resp) => resp.json() as { data?: Mirror })
+      .then((resp) => resp.json() as { data?: Shadow })
       .then((resp) => resp.data),
   });
 };
 
-const getCurlCommand = ({ control }: Mirror) => {
+const getCurlCommand = ({ control }: Shadow) => {
   const headers = Object.entries(control.request.headers)
     // TODO: is it even safe for the browser to get these headers?
     .filter(([k]) => !['true-client-ip', 'cf-connecting-ip'].includes(k))
@@ -105,7 +105,7 @@ const Row = ({
   className,
   onClick,
 }: {
-  mirror: Mirror;
+  mirror: Shadow;
   className?: string;
   onClick?: () => void;
 }) => {
@@ -138,7 +138,7 @@ const Row = ({
   );
 };
 
-const DiffView = ({ mirror }: { mirror: Mirror }) => {
+const DiffView = ({ mirror }: { mirror: Shadow }) => {
   const [showUnchanged, setShowUnchanged] = useState(true);
   useEffect(() => {
     if (showUnchanged) {
@@ -236,7 +236,7 @@ export default function MirroredRequest() {
       | undefined;
   }>();
 
-  const [selected, setSelected] = useState<Mirror>();
+  const [selected, setSelected] = useState<Shadow>();
 
   return (
     <Suspense>
@@ -265,7 +265,7 @@ export default function MirroredRequest() {
               <button
                 className="ml-1.5 btn btn-xs btn-secondary"
                 onClick={() => {
-                  fetch(`${baseUrl}/mirrors/${mirror.id}/replay`, {
+                  fetch(`${baseUrl}/shadows/${mirror.id}/replay`, {
                     method: 'post',
                     headers: {
                       authorization: 'Bearer scurvy-reuse-bulldozer',
@@ -324,7 +324,7 @@ export default function MirroredRequest() {
               <div className="overflow-x-auto">
                 <table className="table">
                   <thead>
-                    <th>Mirrored response header</th>
+                    <th>Shadow response header</th>
                     <th>Value</th>
                   </thead>
                   <tbody>

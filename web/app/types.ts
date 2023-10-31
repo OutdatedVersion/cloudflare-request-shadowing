@@ -3,7 +3,7 @@ export type Patch =
   | { op: 'replace'; path: string; value: unknown }
   | { op: 'remove'; path: string };
 
-export interface MirrorResponse {
+export interface ShadowResponse {
   url: string;
   status: number;
   duration: number;
@@ -20,19 +20,19 @@ export interface MirrorResponse {
   response: string;
 }
 
-export interface MirrorControlResponse extends MirrorResponse {
+export interface ShadowControlResponse extends ShadowResponse {
   request: {
     method: string;
     headers: Record<string, string>;
   };
 }
 
-export interface Mirror {
+export interface Shadow {
   id: string;
   created_at: string;
   divergent: boolean;
-  control: MirrorControlResponse;
-  shadows: MirrorResponse[];
-  replays: Exclude<Mirror, 'replays'>[] | null;
+  control: ShadowControlResponse;
+  shadows: ShadowResponse[];
+  replays: Exclude<Shadow, 'replays'>[] | null;
   tags: Record<string, string> | null;
 }

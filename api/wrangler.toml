@@ -1,4 +1,4 @@
-name = "request-mirroring-api"
+name = "request-shadowing-api"
 main = "src/worker.ts"
 compatibility_date = "2023-08-21"
 node_compat = true

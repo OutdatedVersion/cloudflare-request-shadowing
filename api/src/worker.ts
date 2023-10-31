@@ -157,7 +157,7 @@ router.use(
 // https://developers.cloudflare.com/cloudflare-one/identity/authorization-cookie/validating-json/
 router.use("*", bearerAuth({ token: "scurvy-reuse-bulldozer" }));
 
-router.get("/mirrors/aggregation", async (ctx) => {
+router.get("/shadows/aggregation", async (ctx) => {
   const url = new URL(ctx.req.url);
 
   const start = Date.now();
@@ -214,7 +214,7 @@ router.get("/mirrors/aggregation", async (ctx) => {
   );
 });
 
-router.get("/mirrors", async (ctx) => {
+router.get("/shadows", async (ctx) => {
   const url = new URL(ctx.req.url);
 
   let query = getDatabase(ctx.env)
@@ -336,7 +336,7 @@ const decryptMirrorInPlace = async ({
   return mirror;
 };
 
-router.get("/mirrors/:id", async (ctx) => {
+router.get("/shadows/:id", async (ctx) => {
   const id = ctx.req.param("id");
 
   const start = Date.now();
@@ -387,7 +387,7 @@ router.get("/mirrors/:id", async (ctx) => {
   );
 });
 
-router.post("/mirrors/:id/replay", async (ctx) => {
+router.post("/shadows/:id/replay", async (ctx) => {
   const id = ctx.req.param("id");
 
   const queryStart = Date.now();

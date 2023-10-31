@@ -39,7 +39,7 @@ export const loader = async ({ request, context: { env } }: LoaderArgs) => {
   }
 
   const divergences = await fetch(
-    `${env.API_BASE_URL}/mirrors?${divergencesParams}`,
+    `${env.API_BASE_URL}/shadows?${divergencesParams}`,
     {
       headers: {
         authorization: 'Bearer scurvy-reuse-bulldozer',
@@ -91,7 +91,7 @@ export const loader = async ({ request, context: { env } }: LoaderArgs) => {
   return defer({
     divergences,
     aggregation: fetch(
-      `${env.API_BASE_URL}/mirrors/aggregation?${aggregationParams}`,
+      `${env.API_BASE_URL}/shadows/aggregation?${aggregationParams}`,
       {
         headers: {
           authorization: 'Bearer scurvy-reuse-bulldozer',
@@ -322,7 +322,7 @@ export default function MirrorsList() {
                       onClick={() => {
                         drawerTrigger.current?.click();
                         setMirrorHint(req);
-                        nav(`/mirrors/${req.id}`, { preventScrollReset: true });
+                        nav(`/shadows/${req.id}`, { preventScrollReset: true });
                       }}
                     >
                       <td>
@@ -377,7 +377,7 @@ export default function MirrorsList() {
           htmlFor="main-drawer"
           className="drawer-overlay"
           onClick={() => {
-            nav('/mirrors', { preventScrollReset: true });
+            nav('/shadows', { preventScrollReset: true });
             setMirrorHint(null);
           }}
         ></label>
@@ -385,7 +385,7 @@ export default function MirrorsList() {
           <button
             className="btn btn-sm btm-circle btn-neutral float-right md:invisible"
             onClick={() => {
-              nav('/mirrors', { preventScrollReset: true });
+              nav('/shadows', { preventScrollReset: true });
               setMirrorHint(null);
               drawerTrigger.current?.click();
             }}
