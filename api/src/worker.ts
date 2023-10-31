@@ -166,7 +166,7 @@ router.get("/mirrors/aggregation", async (ctx) => {
   const tags = (ctx.req.queries().tag ?? [])
     .filter((entry) => {
       // Validate tags
-      if (!/^([a-z0-9]+:[a-z0-9]+)$/i.test(entry)) {
+      if (!/^([a-z0-9]+:[a-z0-9-]+)$/i.test(entry)) {
         errors.push(entry);
         return false;
       }
@@ -254,7 +254,7 @@ router.get("/mirrors", async (ctx) => {
   const tags = (ctx.req.queries().tag ?? [])
     .filter((entry) => {
       // Validate tags
-      if (!/^([a-z0-9]+:[a-z0-9]+)$/i.test(entry)) {
+      if (!/^([a-z0-9]+:[a-z0-9-]+)$/i.test(entry)) {
         errors.push(entry);
         return false;
       }

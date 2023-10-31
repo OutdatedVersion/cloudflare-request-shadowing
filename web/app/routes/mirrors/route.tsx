@@ -180,7 +180,7 @@ const TagSelector = () => {
   };
 
   const handleButtonClick = () => {
-    if (!/^([a-z0-9]+:[a-z0-9]+)$/i.test(txt)) {
+    if (!/^([a-z0-9]+:[a-z0-9-]+)$/i.test(txt)) {
       setError(`Invalid tag format: '${txt}'. Expected 'tag:value'.`);
       return;
     }
