@@ -15,7 +15,7 @@ Transparently send requests from one URL to another.
 
 ## 📋 / 📸
 
-https://github.com/OutdatedVersion/cloudflare-request-shadowing/assets/11138610/15a4f08a-6f49-4011-bb4a-f679a2b816ea
+https://github.com/OutdatedVersion/cloudflare-request-shadowing/assets/11138610/ce86df78-8534-4e19-99ae-601559a2f658
 
 ### First class JSON diffs 👀
 
@@ -24,7 +24,7 @@ Compare JSON responses without inconsequential diffs.
 <details> 
   <summary>Screenshots 📸</summary>
 
-https://github.com/OutdatedVersion/cloudflare-request-shadowing/assets/11138610/2097a849-7c8f-4aa7-b601-2216157442d8
+https://github.com/OutdatedVersion/cloudflare-request-shadowing/assets/11138610/a4483a60-be60-4c94-91b8-2f169ec97368
 
 </details>
 
