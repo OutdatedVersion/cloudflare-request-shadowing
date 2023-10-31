@@ -109,16 +109,18 @@ const getMirrorAggregation = async (
 };
 
 const getDatabase = (env: IdkEnv) => {
+  const config = {
+    max: 1,
+    user: env.DB_USERNAME,
+    password: env.DB_PASSWORD,
+    host: env.DB_HOST,
+    port: parseInt(env.DB_PORT, 10),
+    database: env.DB_NAME,
+  };
+  console.log("Connecting to database", { ...config, password: undefined });
   return new Kysely<RequestShadowingDatabase>({
     dialect: new PostgresDialect({
-      pool: new Pool({
-        max: 1,
-        user: env.DB_USERNAME,
-        password: env.DB_PASSWORD,
-        host: env.DB_HOST,
-        port: parseInt(env.DB_PORT, 10),
-        database: env.DB_NAME,
-      }),
+      pool: new Pool(config),
     }),
   });
 };
