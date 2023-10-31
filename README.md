@@ -8,30 +8,93 @@ Transparently send requests from one URL to another.
 - Automatic grouping 🥅
 - Flexible configuration 🔨
   - Combine Workers' `routes` configuration and JavaScript to
-- Tagging
+- Tagging 🏷️
 
 > [!NOTE]  
 > You'll need to use Cloudflare as a reverse proxy[^1] to run this!
 
 ## 📋 / 📸
 
+https://github.com/OutdatedVersion/cloudflare-request-shadowing/assets/11138610/15a4f08a-6f49-4011-bb4a-f679a2b816ea
+
 ### First class JSON diffs 👀
 
-![Video](docs/diff.mp4)
+Compare JSON responses without inconsequential diffs.
+
+<details> 
+  <summary>Screenshots 📸</summary>
+
+https://github.com/OutdatedVersion/cloudflare-request-shadowing/assets/11138610/2097a849-7c8f-4aa7-b601-2216157442d8
+
+</details>
+
+### Aggregation 📈
+
+Visualize divergence trends with aggregated data through the UI or API.
+
+<details> 
+  <summary>Screenshots 📸</summary>
+
+![Alt text](docs/graph-1.png)
+
+![Alt text](docs/graph-2.png)
+
+</details>
+
+### Automatic grouping 🥅
+
+Quickly see what class of issue is happening most.
+
+Groups are created for each unique set of divergent response keys. So, given:
+
+- Response of shadow request A has 2 divergent keys `name` and `price`
+- Response of shadow request B has 2 divergent keys `name` and `price`
+- Response of shadow request C has 1 divergent key `name`
+- Response of shadow request D has no divergent keys
+
+We would have 2 groups:
+
+- 🥐 Request A and B -- `name` and `price`
+- 🥑 Request C -- `name`
+
+Request D is not given a group or rendered on the page as it isn't divergent. It will be included
+in the aggregation graph under "Total"s though.
+
+<details> 
+  <summary>Screenshots 📸</summary>
+  
+![Alt text](docs/grouping.png)
+
+</details>
 
 ### Export 📋
 
+Quickly export saved responses for use fixtures elsewhere.
+
+<details> 
+  <summary>Screenshots 📸</summary>
+  
 ![Alt text](docs/image-6.png)
 
-### Tagging
+</details>
 
+### Tagging 🏷️
+
+Apply tags you can filter by using the UI or API. [Computed with JavaScript](https://github.com/OutdatedVersion/cloudflare-request-shadowing/blob/37499a0238ea72bd42e106a8572dffaeb91296ae/shadower/src/worker.ts#L323-L328), you
+have the flexibility to create effective tags for your use-case.
+
+<details> 
+  <summary>Screenshots 📸</summary>
+   
 ![Alt text](docs/tagging-1.png)
 
 ![Alt text](docs/tagging-2.png)
 
+</details>
+
 ### Sharable URLs
 
-We try to make anything intractable translate to your URL so you can easily share what you're seeing with coworkers.
+We try to make anything intractable translate to the URL so you can easily share what you're seeing with coworkers.
 
 ### Privacy / encryption 🔑
 
@@ -67,18 +130,38 @@ triggered the original shadow. This triggers a shadow as usual
 but the result will be saved to the shadow you _triggered the replay
 from_ instead of creating a new one.
 
+<details> 
+  <summary>Screenshots 📸</summary>
+   
 ![Alt text](docs/image-2.png)
 
 ![Alt text](docs/image-3.png)
 
 ![Alt text](docs/image-1.png)
 
+</details>
+
 ### Light and dark themes
 
 Supporting both people who like to actually read whats on their monitor with bright lights around and those who won't accept
 anything but a dark mode (or to avoid late night *flash bang out*s)
 
+Page theme follows system/browser theme
+
 ![Alt text](docs/light-mode.png)
+
+## Deployment 🚢
+
+Deployment/configuration guide WIP 🏗️
+
+You will deploy and run this tool yourself.
+
+- A Postgres server
+-
+
+This tool is
+
+<!-- <img width="748" alt="image-1" src="https://user-images.githubusercontent.com/11138610/279465640-20aced59-3c55-43ba-8775-d0849048dfab.png"> -->
 
 [^1]:
     Verify there is an "orange cloud" on the dashboard for the domain you intend to use.
