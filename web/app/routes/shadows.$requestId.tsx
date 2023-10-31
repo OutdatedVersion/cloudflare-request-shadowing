@@ -161,7 +161,7 @@ const DiffView = ({ mirror }: { mirror: Shadow }) => {
           className="ml-2 px-1 inline-block dark:text-white"
           style={{ backgroundColor: 'rgb(248 113 113)' }}
         >
-          Mirrored
+          Shadow
         </p>
       </div>
 
