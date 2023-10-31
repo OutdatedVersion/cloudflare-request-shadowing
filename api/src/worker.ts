@@ -130,7 +130,7 @@ const router = new Hono<{
 }>();
 
 router.onError((error, ctx) => {
-  console.error("uncaught error", error);
+  console.error("uncaught error", error.stack);
   return ctx.json(
     {
       name: error.name,
