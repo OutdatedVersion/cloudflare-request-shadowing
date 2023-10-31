@@ -123,6 +123,8 @@ const diff = create({
 const getResponseBody = (res: Response) => {
   const type = res.headers.get("content-type") ?? "";
   if (type.includes("application/json")) {
+    // Even though we'll be serializing this back to text
+    // soon we parse as JSON to perform the diff
     return res.json();
   } else {
     return res.text();
