@@ -1,4 +1,4 @@
-import { defer, type LoaderArgs } from '@remix-run/cloudflare';
+import { defer, json, type LoaderArgs } from '@remix-run/cloudflare';
 import {
   Await,
   Outlet,
@@ -23,8 +23,17 @@ import {
 } from 'recharts';
 import cn from 'classnames';
 import { Tag } from '~/components/Tag';
+import { getAuthzCookie } from '~/auth';
 
 export const loader = async ({ request, context: { env } }: LoaderArgs) => {
+  const authzCookie = getAuthzCookie(request);
+  if (!authzCookie) {
+    throw json(
+      { name: 'Unauthorized', message: 'Missing cookie' },
+      { status: 401 },
+    );
+  }
+
   const url = new URL(request.url);
   const limit = url.searchParams.get('limit') ?? 50;
   const tags = url.searchParams.getAll('tag');
@@ -41,10 +50,20 @@ export const loader = async ({ request, context: { env } }: LoaderArgs) => {
     `${env.API_BASE_URL}/shadows?${divergencesParams}`,
     {
       headers: {
-        authorization: 'Bearer scurvy-reuse-bulldozer',
+        cookie: authzCookie,
       },
     },
   )
+    .then(async (resp) => {
+      if (resp.status !== 200) {
+        console.error('divergent request list response', {
+          status: resp.status,
+          body: await resp.text(),
+        });
+        throw new Error(`failed to fetch divergent requests`);
+      }
+      return resp;
+    })
     .then(
       (resp) =>
         resp.json() as {
@@ -85,7 +104,7 @@ export const loader = async ({ request, context: { env } }: LoaderArgs) => {
       `${env.API_BASE_URL}/shadows/aggregation?${aggregationParams}`,
       {
         headers: {
-          authorization: 'Bearer scurvy-reuse-bulldozer',
+          cookie: authzCookie,
         },
       },
     )
@@ -221,9 +240,7 @@ export default function MirrorsList() {
                       allowDataOverflow
                       dataKey="end"
                       tickSize={10}
-                      tickFormatter={(val) =>
-                        format(parseISO(val), 'h:mmaaa')
-                      }
+                      tickFormatter={(val) => format(parseISO(val), 'h:mmaaa')}
                       type="category"
                     />
                     <YAxis />

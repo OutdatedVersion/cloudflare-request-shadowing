@@ -1,6 +1,6 @@
 import { Hono } from "hono";
-import { bearerAuth } from "hono/bearer-auth";
 import { cors } from "hono/cors";
+import { getCookie } from "hono/cookie";
 import { Pool } from "pg";
 import set from "date-fns/set";
 import subMinutes from "date-fns/subMinutes";
@@ -8,6 +8,7 @@ import { Kysely, PostgresDialect, sql } from "kysely";
 import isBefore from "date-fns/isBefore";
 import isAfter from "date-fns/isAfter";
 import { z } from "zod";
+import { JWTPayload, createRemoteJWKSet, jwtVerify } from "jose";
 import { requestsTableSchema } from "./schema";
 import { generateKey, decrypt, EncryptedData } from "@local/encryption";
 
@@ -18,6 +19,8 @@ export interface IdkEnv {
   DB_PORT: string;
   DB_NAME: string;
   ENCRYPTION_SECRET: string;
+  AUTH_TEAM_NAME: string;
+  AUTH_AUD_CLAIM: string;
   [other: string]: string;
 }
 
@@ -126,8 +129,25 @@ const getDatabase = (env: IdkEnv) => {
   });
 };
 
+let _jwk: ReturnType<typeof createRemoteJWKSet>;
+const getJsonWebKeyProvider = (env: IdkEnv) => {
+  if (_jwk) {
+    return _jwk;
+  }
+
+  _jwk = createRemoteJWKSet(
+    new URL(
+      `https://${env.AUTH_TEAM_NAME}.cloudflareaccess.com/cdn-cgi/access/certs`,
+    ),
+  );
+  return _jwk;
+};
+
 const router = new Hono<{
   Bindings: IdkEnv;
+  Variables: {
+    tokenClaims: JWTPayload;
+  };
 }>();
 
 router.onError((error, ctx) => {
@@ -153,9 +173,54 @@ router.use(
     ],
   }),
 );
-// TODO: forward JWT from Cloudflare Access and validate that?
 // https://developers.cloudflare.com/cloudflare-one/identity/authorization-cookie/validating-json/
-router.use("*", bearerAuth({ token: "scurvy-reuse-bulldozer" }));
+router.use("*", async (ctx, next) => {
+  const token = (
+    getCookie(ctx, "CF_Authorization") ??
+    ctx.req.header("Cf-Access-Jwt-Assertion")
+  )?.trim();
+
+  if (!token) {
+    return ctx.json(
+      {
+        name: "Unauthorized",
+        message: "Cookie/header missing",
+      },
+      { status: 401 },
+    );
+  }
+
+  try {
+    const { payload } = await jwtVerify(
+      token,
+      // Since we're relying on network effects to update system
+      // time it's likely we'll deny some requests from a stale JWK cache.
+      getJsonWebKeyProvider(ctx.env),
+      {
+        issuer: `https://${ctx.env.AUTH_TEAM_NAME}.cloudflareaccess.com`,
+        audience: ctx.env.AUTH_AUD_CLAIM,
+      },
+    );
+
+    ctx.set("tokenClaims", payload);
+  } catch (error) {
+    return ctx.json(
+      {
+        name: "Unauthorized",
+        message: "Malformed token",
+        cause: {
+          name: (error as Error).name,
+          message: (error as Error).message,
+        },
+      },
+      {
+        status: 401,
+      },
+    );
+  }
+
+  await next();
+});
 
 router.get("/shadows/aggregation", async (ctx) => {
   const url = new URL(ctx.req.url);

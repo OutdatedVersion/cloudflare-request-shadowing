@@ -18,6 +18,7 @@ import type { loader as rootLoader } from './shadows/route';
 
 import '~/diff.css';
 import { Tag } from '~/components/Tag';
+import { getAuthzCookie } from '~/auth';
 
 const diff = create({
   objectHash: (obj: Record<string, unknown>) => {
@@ -27,7 +28,24 @@ const diff = create({
   },
 });
 
-export const loader = async ({ params, context: { env } }: LoaderArgs) => {
+export const loader = async ({
+  request,
+  params,
+  context: { env },
+}: LoaderArgs) => {
+  const authzCookie = getAuthzCookie(request);
+  if (!authzCookie) {
+    throw json(
+      {
+        name: 'Unauthorized',
+        message: 'Missing cookie',
+      },
+      {
+        status: 401,
+      },
+    );
+  }
+
   const { requestId } = params;
 
   if (!requestId) {
@@ -45,7 +63,7 @@ export const loader = async ({ params, context: { env } }: LoaderArgs) => {
     baseUrl: env.API_BASE_URL,
     mirror: fetch(`${env.API_BASE_URL}/shadows/${requestId}`, {
       headers: {
-        authorization: 'Bearer scurvy-reuse-bulldozer',
+        cookie: authzCookie,
       },
     })
       .then((resp) => resp.json() as { data?: Shadow })
