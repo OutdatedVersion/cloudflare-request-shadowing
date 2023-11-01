@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { getCookie } from "hono/cookie";
+import { HTTPException } from "hono/http-exception";
 import { Pool } from "pg";
 import set from "date-fns/set";
 import subMinutes from "date-fns/subMinutes";
@@ -151,6 +152,10 @@ const router = new Hono<{
 }>();
 
 router.onError((error, ctx) => {
+  if (error instanceof HTTPException) {
+    return error.getResponse();
+  }
+
   console.error("uncaught error", error.stack);
   return ctx.json(
     {
