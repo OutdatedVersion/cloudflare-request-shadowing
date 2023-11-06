@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { getCookie } from "hono/cookie";
 import { HTTPException } from "hono/http-exception";
-import { Pool } from "pg";
+import { Pool, PoolConfig } from "pg";
 import set from "date-fns/set";
 import subMinutes from "date-fns/subMinutes";
 import { Kysely, PostgresDialect, sql } from "kysely";
@@ -19,10 +19,11 @@ export interface IdkEnv {
   DB_HOST: string;
   DB_PORT: string;
   DB_NAME: string;
+  DB_HYPERDRIVE?: Hyperdrive;
   ENCRYPTION_SECRET: string;
   AUTH_TEAM_NAME: string;
   AUTH_AUD_CLAIM: string;
-  [other: string]: string;
+  [other: string]: unknown;
 }
 
 interface RequestShadowingDatabase {
@@ -114,14 +115,15 @@ const getMirrorAggregation = async (
 };
 
 const getDatabase = (env: IdkEnv) => {
-  const config = {
+  const config: PoolConfig = {
     max: 1,
-    user: env.DB_USERNAME,
-    password: env.DB_PASSWORD,
-    host: env.DB_HOST,
-    port: parseInt(env.DB_PORT, 10),
-    database: env.DB_NAME,
+    user: env.DB_HYPERDRIVE?.user ?? env.DB_USERNAME,
+    password: env.DB_HYPERDRIVE?.password ?? env.DB_PASSWORD,
+    host: env.DB_HYPERDRIVE?.host ?? env.DB_HOST,
+    port: parseInt(env.DB_HYPERDRIVE?.port ?? env.DB_PORT, 10),
+    database: env.DB_HYPERDRIVE?.database ?? env.DB_NAME,
   };
+
   console.log("Connecting to database", { ...config, password: undefined });
   return new Kysely<RequestShadowingDatabase>({
     dialect: new PostgresDialect({
