@@ -1,5 +1,5 @@
 {
-  "name": "@local/encryption",
+  "name": "@local/schema",
   "type": "module",
   "private": true,
   "main": "./dist/lib.js",
@@ -8,7 +8,10 @@
     "prepare": "tsc -p tsconfig.json"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20231016.0",
-    "typescript": "^5.2.2"
+    "typescript": "^5.2.2",
+    "zod": "^3.22.4"
+  },
+  "peerDependencies": {
+    "zod": "~3"
   }
 }

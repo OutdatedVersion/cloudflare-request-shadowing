@@ -119,7 +119,7 @@ export const loader = async ({ request, context: { env } }: LoaderArgs) => {
             }>;
           },
       )
-      .then((resp) => resp.data),
+      .then((resp) => resp.data ?? []),
   });
 };
 

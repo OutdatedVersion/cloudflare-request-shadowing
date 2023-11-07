@@ -4,20 +4,24 @@
   "private": true,
   "scripts": {
     "deploy": "wrangler deploy",
-    "start": "wrangler dev --node-compat"
+    "start": "TZ=UTC wrangler dev --node-compat"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20230419.0",
+    "@total-typescript/ts-reset": "^0.5.1",
+    "@types/lodash": "^4.14.200",
     "@types/pg": "^8.10.2",
     "typescript": "^5.0.4",
     "wrangler": "^3.13.1"
   },
   "dependencies": {
     "@local/encryption": "file:../encryption",
+    "@local/schema": "file:../schema",
     "date-fns": "^2.30.0",
     "hono": "^3.7.6",
     "jose": "^5.0.1",
     "kysely": "^0.26.1",
+    "lodash": "^4.17.21",
     "pg": "^8.11.3",
     "zod": "^3.22.2"
   }

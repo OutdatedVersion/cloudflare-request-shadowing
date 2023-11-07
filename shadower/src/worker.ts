@@ -221,51 +221,11 @@ const triggerAndProcessShadow = async (
     },
     { added: 0, removed: 0 },
   );
-  const divergent = summary.added > 0 || summary.removed > 0;
 
   console.log("Generating encryption key");
   const cryptoKey = await generateKey(env.ENCRYPTION_SECRET);
 
   console.log("Trying to save");
-
-  const controlData = {
-    url: control.url,
-    duration: controlEndedAt - controlStartedAt,
-    startedAt: controlStartedAt,
-    endedAt: controlEndedAt,
-    status: control.status,
-    request: {
-      method: request.method,
-      headers: await encrypt(
-        JSON.stringify(Object.fromEntries(request.headers)),
-        cryptoKey,
-      ),
-    },
-    response: await encrypt(
-      typeof a === "string" ? a : JSON.stringify(a),
-      cryptoKey,
-    ),
-  };
-  const shadowData = {
-    url: shadowed.url,
-    duration: end - start,
-    startedAt: start,
-    endedAt: end,
-    status: shadowed.status,
-    diff: {
-      ...summary,
-      paths: patches.map((p) => p.path),
-      patches: await encrypt(JSON.stringify(patches), cryptoKey),
-    },
-    headers: await encrypt(
-      JSON.stringify(Object.fromEntries(shadowed.headers)),
-      cryptoKey,
-    ),
-    response: await encrypt(
-      typeof b === "string" ? b : JSON.stringify(b),
-      cryptoKey,
-    ),
-  };
 
   const databaseClientStart = Date.now();
   const client = await getClient(env);
@@ -274,34 +234,72 @@ const triggerAndProcessShadow = async (
   });
   const databaseStart = Date.now();
 
-  if (parentId) {
-    console.log("Recognized as replay", { parentId });
-    await client.query(
-      "UPDATE requests SET replays = COALESCE(replays, '[]'::jsonb) || $2 WHERE id = $1;",
-      [
-        parentId,
-        JSON.stringify([
-          {
-            id: crypto.randomUUID(),
-            created_at: new Date().toISOString(),
-            divergent,
-            control: controlData,
-            shadows: [shadowData],
-          },
-        ]),
-      ],
-    );
-  } else {
-    await client.query(
-      "INSERT INTO requests (id, divergent, control, shadows, tags) VALUES (gen_random_uuid(), $1, $2, $3, $4);",
-      [
-        divergent,
-        JSON.stringify(controlData),
-        JSON.stringify([shadowData]),
-        JSON.stringify(config.tags),
-      ],
-    );
-  }
+  await client.query(
+    `INSERT INTO
+      new_requests
+     (
+        id,
+        parent_id,
+        tags,
+        diff_paths,
+        diff_added_count,
+        diff_removed_count,
+        diff_patches,
+        control_req_url,
+        control_req_method,
+        control_req_headers,
+        control_res_http_status,
+        control_res_body,
+        control_started_at,
+        control_ended_at,
+        shadow_req_url,
+        shadow_req_method,
+        shadow_res_headers,
+        shadow_res_http_status,
+        shadow_res_body,
+        shadow_started_at,
+        shadow_ended_at
+      )
+      VALUES
+      (gen_random_uuid(), $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20);
+    `,
+    [
+      parentId,
+      JSON.stringify(config.tags),
+      patches.length > 0 ? patches.map((p) => p.path) : null,
+      summary.added || null,
+      summary.removed || null,
+      JSON.stringify(await encrypt(JSON.stringify(patches), cryptoKey)),
+      control.url,
+      request.method.toLowerCase(),
+      JSON.stringify(
+        await encrypt(
+          JSON.stringify(Object.fromEntries(request.headers)),
+          cryptoKey,
+        ),
+      ),
+      control.status,
+      JSON.stringify(
+        await encrypt(typeof a === "string" ? a : JSON.stringify(a), cryptoKey),
+      ),
+      new Date(controlStartedAt),
+      new Date(controlEndedAt),
+      shadowed.url,
+      request.method.toLowerCase(),
+      JSON.stringify(
+        await encrypt(
+          JSON.stringify(Object.fromEntries(shadowed.headers)),
+          cryptoKey,
+        ),
+      ),
+      shadowed.status,
+      JSON.stringify(
+        await encrypt(typeof b === "string" ? b : JSON.stringify(b), cryptoKey),
+      ),
+      new Date(start),
+      new Date(end),
+    ],
+  );
 
   console.log("Saved to database", { duration: Date.now() - databaseStart });
   const databaseCloseStart = Date.now();

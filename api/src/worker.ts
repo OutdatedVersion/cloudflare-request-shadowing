@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { getCookie } from "hono/cookie";
 import { HTTPException } from "hono/http-exception";
-import { Pool } from "pg";
+import { Pool, PoolConfig } from "pg";
 import set from "date-fns/set";
 import subMinutes from "date-fns/subMinutes";
 import { Kysely, PostgresDialect, sql } from "kysely";
@@ -10,8 +10,14 @@ import isBefore from "date-fns/isBefore";
 import isAfter from "date-fns/isAfter";
 import { z } from "zod";
 import { JWTPayload, createRemoteJWKSet, jwtVerify } from "jose";
-import { requestsTableSchema } from "./schema";
-import { generateKey, decrypt, EncryptedData } from "@local/encryption";
+import { generateKey, decrypt } from "@local/encryption";
+import partition from "lodash/partition";
+import {
+  PublicApi,
+  PublicRequest,
+  EncryptedRequestTable,
+  DecryptedRequestTable,
+} from "@local/schema";
 
 export interface IdkEnv {
   DB_USERNAME: string;
@@ -19,14 +25,15 @@ export interface IdkEnv {
   DB_HOST: string;
   DB_PORT: string;
   DB_NAME: string;
+  DB_HYPERDRIVE?: Hyperdrive;
   ENCRYPTION_SECRET: string;
   AUTH_TEAM_NAME: string;
   AUTH_AUD_CLAIM: string;
-  [other: string]: string;
+  [other: string]: unknown;
 }
 
 interface RequestShadowingDatabase {
-  requests: z.infer<typeof requestsTableSchema>;
+  requests: EncryptedRequestTable;
 }
 
 const serverTiming = (
@@ -59,8 +66,12 @@ const getMirrorAggregation = async (
 ) => {
   let incompleteTotalsQuery = db
     .selectFrom("requests")
-    .select((eb) => eb.fn.count<string>("divergent").as("total"))
-    .select(sql<string>`sum(divergent::int)`.as("divergent"))
+    .select((eb) => eb.fn.countAll().as("total"))
+    .select(
+      sql<string>`sum(case when diff_paths is not null then 1 else 0 end)`.as(
+        "divergent",
+      ),
+    )
     .select(
       sql<Date>`date_bin(${`${rollupPeriodMinutes} minutes`}::interval, created_at, now() - ${`${lookbackPeriodHours} hours`}::interval)`.as(
         "bin",
@@ -114,14 +125,15 @@ const getMirrorAggregation = async (
 };
 
 const getDatabase = (env: IdkEnv) => {
-  const config = {
+  const config: PoolConfig = {
     max: 1,
-    user: env.DB_USERNAME,
-    password: env.DB_PASSWORD,
-    host: env.DB_HOST,
-    port: parseInt(env.DB_PORT, 10),
-    database: env.DB_NAME,
+    user: env.DB_HYPERDRIVE?.user ?? env.DB_USERNAME,
+    password: env.DB_HYPERDRIVE?.password ?? env.DB_PASSWORD,
+    host: env.DB_HYPERDRIVE?.host ?? env.DB_HOST,
+    port: parseInt(env.DB_HYPERDRIVE?.port ?? env.DB_PORT, 10),
+    database: env.DB_HYPERDRIVE?.database ?? env.DB_NAME,
   };
+
   console.log("Connecting to database", { ...config, password: undefined });
   return new Kysely<RequestShadowingDatabase>({
     dialect: new PostgresDialect({
@@ -289,35 +301,20 @@ router.get("/shadows", async (ctx) => {
 
   let query = getDatabase(ctx.env)
     .selectFrom("requests")
-    .select(["id", "divergent", "created_at", "tags"])
-    .select(
-      sql<Array<{ added: number; removed: number; paths: string[] }>>`
-          jsonb_build_object(
-            'added', jsonb_extract_path(shadows, '0', 'diff', 'added'),
-            'removed', jsonb_extract_path(shadows, '0', 'diff', 'removed'),
-            'paths', jsonb_extract_path(shadows, '0', 'diff', 'paths')
-          )`.as("diff"),
-    )
-    .select(
-      sql<Array<{ url: string; status: number }>>`
-          jsonb_build_object(
-            'url', jsonb_extract_path(control, 'url'),
-            'status', jsonb_extract_path(control, 'status')
-          )`.as("control"),
-    )
-    .select(
-      sql<Array<{ url: string; status: number }>>`
-          jsonb_build_object(
-            'url', jsonb_extract_path(shadows, '0', 'url'),
-            'status', jsonb_extract_path(shadows, '0', 'status')
-          )`.as("shadow"),
-    )
+    // metadata
+    .select(["id", "created_at", "tags"])
+    // divergence data
+    .select(["diff_paths", "diff_added_count", "diff_removed_count"])
+    // control data
+    .select(["control_req_url", "control_res_http_status"])
+    // shadow data
+    .select(["shadow_req_url", "shadow_res_http_status"])
     .orderBy("created_at", "desc")
     .limit(Math.min(250, parseInt(url.searchParams.get("limit") ?? "50", 10)));
 
   const param = url.searchParams.get("divergent")?.toLowerCase();
   if (param === "" || param === "true") {
-    query = query.where("divergent", "is", true);
+    query = query.where("diff_paths", "is not", null);
   }
 
   const errors: string[] = [];
@@ -356,99 +353,162 @@ router.get("/shadows", async (ctx) => {
 
   const start = Date.now();
   const result = await query.execute();
+  const total = Date.now() - start;
 
   return ctx.json(
     {
-      data: result,
+      data: result.map((req) => ({
+        id: req.id,
+        created_at: req.created_at,
+        tags: req.tags,
+        diff: {
+          added: req.diff_added_count,
+          removed: req.diff_removed_count,
+          paths: req.diff_paths,
+        },
+        control: {
+          url: req.control_req_url,
+          status: req.control_res_http_status,
+        },
+        shadow: {
+          url: req.shadow_req_url,
+          status: req.shadow_res_http_status,
+        },
+      })),
     },
     {
       headers: {
-        ...serverTiming([{ name: "query", dur: Date.now() - start }]),
+        ...serverTiming([{ name: "query", dur: total }]),
       },
     },
   );
 });
 
-const decryptMirrorInPlace = async ({
-  mirror,
+const decryptRequest = async ({
+  encrypted,
   key,
 }: {
-  mirror: Omit<z.infer<typeof requestsTableSchema>, "replays">;
+  encrypted: Omit<EncryptedRequestTable, "replays">;
   key: CryptoKey;
 }) => {
-  mirror.control.response = await decrypt(
-    mirror.control.response as EncryptedData,
-    {
+  const decrypted = { ...encrypted } as unknown as DecryptedRequestTable;
+  decrypted.control_res_body = await decrypt(encrypted.control_res_body, {
+    key,
+  });
+  decrypted.control_req_headers = JSON.parse(
+    await decrypt(encrypted.control_req_headers, {
       key,
+    }),
+  ) as Record<string, string>;
+  if (encrypted.diff_patches) {
+    // @ts-expect-error
+    decrypted.diff_patches = JSON.parse(
+      await decrypt(encrypted.diff_patches, {
+        key,
+      }),
+    );
+  }
+  decrypted.shadow_res_headers = JSON.parse(
+    await decrypt(encrypted.shadow_res_headers, {
+      key,
+    }),
+  ) as Record<string, string>;
+  decrypted.shadow_res_body = await decrypt(encrypted.shadow_res_body, {
+    key,
+  });
+  return decrypted;
+};
+
+// "mom, can we get ORM?"
+// "we have ORM at home":
+const databaseToPublicSchema = (req: DecryptedRequestTable): PublicRequest => {
+  return {
+    id: req.id,
+    created_at: req.created_at.toISOString(),
+    tags: req.tags,
+    diff:
+      req.diff_added_count !== null &&
+      req.diff_removed_count !== null &&
+      req.diff_paths
+        ? {
+            added: req.diff_added_count,
+            removed: req.diff_removed_count,
+            paths: req.diff_paths,
+            patches: req.diff_patches,
+          }
+        : null,
+    control: {
+      request: {
+        url: req.control_req_url,
+        method: req.control_req_method,
+        headers: req.control_req_headers,
+      },
+      response: {
+        status: req.control_res_http_status,
+        body: req.control_res_body,
+      },
     },
-  );
-  mirror.control.request.headers = JSON.parse(
-    await decrypt(mirror.control.request.headers as EncryptedData, {
-      key,
-    }),
-  );
-  mirror.shadows[0].diff.patches = JSON.parse(
-    await decrypt(mirror.shadows[0].diff.patches as EncryptedData, {
-      key,
-    }),
-  );
-  mirror.shadows[0].headers = JSON.parse(
-    await decrypt(mirror.shadows[0].headers as EncryptedData, {
-      key,
-    }),
-  );
-  mirror.shadows[0].response = await decrypt(
-    mirror.shadows[0].response as EncryptedData,
-    {
-      key,
+    shadow: {
+      request: {
+        url: req.shadow_req_url,
+        method: req.shadow_req_method,
+        // 🤠
+        headers: req.control_req_headers,
+      },
+      response: {
+        status: req.shadow_res_http_status,
+        body: req.shadow_res_body,
+        headers: req.shadow_res_headers,
+      },
     },
-  );
-  return mirror;
+  };
 };
 
 router.get("/shadows/:id", async (ctx) => {
   const id = ctx.req.param("id");
 
   const start = Date.now();
-  const mirror = await getDatabase(ctx.env)
+  const requests = await getDatabase(ctx.env)
     .selectFrom("requests")
     .selectAll()
-    .where("id", "=", id)
+    .where((qb) => qb.or([qb("id", "=", id), qb("parent_id", "=", id)]))
     .limit(1)
-    .executeTakeFirst();
+    .execute();
 
-  if (!mirror) {
+  if (requests.length <= 0) {
     return ctx.json(
       { message: "No such mirror", data: { id } },
       { status: 404 },
     );
   }
 
-  if (typeof mirror.control.response === "object") {
-    const { key } = await generateKey(ctx.env.ENCRYPTION_SECRET, {
-      saltAsBase64: mirror.control.response.salt,
-    });
+  const decrypted = await Promise.all(
+    requests.map(async (req) => {
+      const { key } = await generateKey(ctx.env.ENCRYPTION_SECRET, {
+        saltAsBase64: req.control_req_headers.salt,
+      });
 
-    await decryptMirrorInPlace({
-      key,
-      mirror,
-    });
+      return await decryptRequest({
+        key,
+        encrypted: req,
+      });
+    }),
+  );
 
-    if (mirror.replays) {
-      for (const replay of mirror.replays) {
-        const encodedSalt = (replay.control.response as EncryptedData).salt;
-        // Since replays are appended one at a time in separate requests they
-        // will always have a different salt preventing reuse.
-        const replayKey = await generateKey(ctx.env.ENCRYPTION_SECRET, {
-          saltAsBase64: encodedSalt,
-        });
-        await decryptMirrorInPlace({ key: replayKey.key, mirror: replay });
-      }
-    }
-  }
+  const [[original], replays] = partition(
+    decrypted,
+    (d) => d.parent_id === null,
+  );
+
+  const data: PublicApi["/shadows/:id"] = {
+    ...databaseToPublicSchema(original),
+    replays: replays.map((r) => databaseToPublicSchema(r)),
+  };
 
   return ctx.json(
-    { data: mirror },
+    {
+      data,
+    },
     {
       headers: {
         ...serverTiming([{ name: "query", dur: Date.now() - start }]),
@@ -461,7 +521,7 @@ router.post("/shadows/:id/replay", async (ctx) => {
   const id = ctx.req.param("id");
 
   const queryStart = Date.now();
-  const mirror = await getDatabase(ctx.env)
+  const encrypted = await getDatabase(ctx.env)
     .selectFrom("requests")
     .selectAll()
     .where("id", "=", id)
@@ -469,27 +529,24 @@ router.post("/shadows/:id/replay", async (ctx) => {
     .executeTakeFirst();
   const queryMs = Date.now() - queryStart;
 
-  if (!mirror) {
+  if (!encrypted) {
     return ctx.json(
       { message: "No such mirror", data: { id } },
       { status: 404 },
     );
   }
 
-  if (typeof mirror.control.response === "object") {
-    const { key } = await generateKey(ctx.env.ENCRYPTION_SECRET, {
-      saltAsBase64: mirror.control.response.salt,
-    });
-
-    await decryptMirrorInPlace({
-      key,
-      mirror,
-    });
-  }
+  const { key } = await generateKey(ctx.env.ENCRYPTION_SECRET, {
+    saltAsBase64: encrypted.control_res_body.salt,
+  });
+  const decrypted = await decryptRequest({
+    key,
+    encrypted,
+  });
 
   // rely on ingest filters to avoid header bomb
   const headers = Object.fromEntries(
-    Object.entries(mirror.control.request.headers).filter(
+    Object.entries(decrypted.control_req_headers).filter(
       ([k]) =>
         ![
           "x-forwarded-proto",
@@ -504,8 +561,8 @@ router.post("/shadows/:id/replay", async (ctx) => {
   );
 
   const start = Date.now();
-  await fetch(mirror.control.url, {
-    method: mirror.control.request.method,
+  await fetch(decrypted.control_req_url, {
+    method: decrypted.control_req_method,
     headers: {
       ...headers,
       "shadowing-parent-id": id,
