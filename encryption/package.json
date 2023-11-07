@@ -1,5 +1,6 @@
 {
   "name": "@local/encryption",
+  "type": "module",
   "private": true,
   "main": "./dist/lib.js",
   "types": "./dist/lib.d.ts",

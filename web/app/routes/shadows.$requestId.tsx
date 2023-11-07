@@ -3,7 +3,6 @@ import { Await, useLoaderData, useOutletContext } from '@remix-run/react';
 import format from 'date-fns/format';
 import parseISO from 'date-fns/parseISO';
 import { type ReactNode, Suspense, useEffect, useState } from 'react';
-import type { Shadow } from '~/types';
 import { create, formatters } from 'jsondiffpatch';
 import {
   ClipboardDocumentIcon,
@@ -15,6 +14,7 @@ import {
 import { quote as shellQuote } from 'shell-quote';
 import cn from 'classnames';
 import type { loader as rootLoader } from './shadows/route';
+import type { PublicApi, PublicRequest } from '@local/schema';
 
 import '~/diff.css';
 import { Tag } from '~/components/Tag';
@@ -66,12 +66,12 @@ export const loader = async ({
         cookie: authzCookie,
       },
     })
-      .then((resp) => resp.json() as { data?: Shadow })
+      .then((resp) => resp.json() as Promise<PublicApi['/shadows/:id']>)
       .then((resp) => resp.data),
   });
 };
 
-const getCurlCommand = ({ control }: Shadow) => {
+const getCurlCommand = ({ control }: PublicRequest) => {
   const headers = Object.entries(control.request.headers)
     // TODO: is it even safe for the browser to get these headers?
     .filter(([k]) => !['true-client-ip', 'cf-connecting-ip'].includes(k))
@@ -80,7 +80,7 @@ const getCurlCommand = ({ control }: Shadow) => {
 
   let cmd = `curl -X ${shellQuote([
     control.request.method,
-  ])} ${headers} ${shellQuote([control.url])}`;
+  ])} ${headers} ${shellQuote([control.request.url])}`;
 
   // We want the reproduction command to be as close as possible to the original request
   // Though the original client likely has a different gzip distribution than our user
@@ -123,29 +123,30 @@ const Row = ({
   className,
   onClick,
 }: {
-  mirror: Shadow;
+  mirror: PublicRequest;
   className?: string;
   onClick?: () => void;
 }) => {
   return (
     <tr className={className} onClick={onClick}>
       <td>{format(parseISO(mirror.created_at), 'Ppp')}</td>
-      <td>{mirror.control.status}</td>
+      <td>{mirror.control.response.status}</td>
       <td
         className={cn({
-          'text-yellow-600': mirror.control.status !== mirror.shadows[0].status,
+          'text-yellow-600':
+            mirror.control.response.status !== mirror.shadow.response.status,
         })}
       >
-        {mirror.shadows[0].status}
+        {mirror.shadow.response.status}
       </td>
       <td>
-        {mirror.shadows[0].diff.added || mirror.shadows[0].diff.removed ? (
+        {mirror.diff?.added || mirror.diff?.removed ? (
           <>
             <span className="font-medium text-green-600">
-              +{mirror.shadows[0].diff.added}
+              +{mirror.diff.added}
             </span>
             <span className="pl-1.5 font-medium text-red-600">
-              -{mirror.shadows[0].diff.removed}
+              -{mirror.diff.removed}
             </span>
           </>
         ) : (
@@ -156,7 +157,7 @@ const Row = ({
   );
 };
 
-const DiffView = ({ mirror }: { mirror: Shadow }) => {
+const DiffView = ({ mirror }: { mirror: PublicRequest }) => {
   const [showUnchanged, setShowUnchanged] = useState(true);
   useEffect(() => {
     if (showUnchanged) {
@@ -210,14 +211,18 @@ const DiffView = ({ mirror }: { mirror: Shadow }) => {
           >
             <CopyToClipboard
               getText={() =>
-                JSON.stringify(JSON.parse(mirror.control.response), null, 2)
+                JSON.stringify(
+                  JSON.parse(mirror.control.response.body),
+                  null,
+                  2,
+                )
               }
             >
               Control response
             </CopyToClipboard>
             <CopyToClipboard
               getText={() =>
-                JSON.stringify(JSON.parse(mirror.shadows[0].response), null, 2)
+                JSON.stringify(JSON.parse(mirror.shadow.response.body), null, 2)
               }
             >
               Shadow response
@@ -233,10 +238,10 @@ const DiffView = ({ mirror }: { mirror: Shadow }) => {
         dangerouslySetInnerHTML={{
           __html: formatters.html.format(
             diff.diff(
-              JSON.parse(mirror.control.response),
-              JSON.parse(mirror.shadows[0].response),
+              JSON.parse(mirror.control.response.body),
+              JSON.parse(mirror.shadow.response.body),
             )!,
-            JSON.parse(mirror.control.response),
+            JSON.parse(mirror.control.response.body),
           ),
         }}
       />
@@ -254,7 +259,7 @@ export default function MirroredRequest() {
       | undefined;
   }>();
 
-  const [selected, setSelected] = useState<Shadow>();
+  const [selected, setSelected] = useState<PublicRequest>();
 
   return (
     <Suspense>
@@ -264,7 +269,7 @@ export default function MirroredRequest() {
           <div>
             <div>
               <div className="badge badge-info inline-block">
-                {new URL(mirror.control.url).hostname}
+                {new URL(mirror.control.request.url).hostname}
               </div>
 
               {mirror.tags &&
@@ -274,9 +279,11 @@ export default function MirroredRequest() {
             </div>
 
             <h1 className="inline-block text-xl font-bold mt-2">
-              {mirror.control.request.method}{' '}
-              {new URL(mirror.control.url).pathname +
-                new URL(mirror.control.url).search}
+              <span>{mirror.control.request.method.toUpperCase()}</span>
+              <span className="pl-2">
+                {new URL(mirror.control.request.url).pathname +
+                  new URL(mirror.control.request.url).search}
+              </span>
             </h1>
 
             <div className="tooltip tooltip-bottom" data-tip={'Replay request'}>
@@ -322,14 +329,14 @@ export default function MirroredRequest() {
             </div>
 
             <div className="mt-10 font-mono bg-base-300 p-3 w-full rounded-sm relative">
-              {(selected ?? mirror).divergent ? (
+              {(selected ?? mirror).diff ? (
                 <DiffView mirror={selected ?? mirror} />
               ) : (
                 <>
                   <p>Responses match 🥳</p>
                   <pre className="mt-2">
                     {JSON.stringify(
-                      JSON.parse((selected ?? mirror).shadows[0].response),
+                      JSON.parse((selected ?? mirror).shadow.response.body),
                       null,
                       2,
                     )}
@@ -347,7 +354,7 @@ export default function MirroredRequest() {
                   </thead>
                   <tbody>
                     {Object.entries(
-                      (selected ?? mirror).shadows[0].headers,
+                      (selected ?? mirror).shadow.response.headers,
                     ).map(([k, v]) => (
                       <tr key={k}>
                         <td>{k}</td>
