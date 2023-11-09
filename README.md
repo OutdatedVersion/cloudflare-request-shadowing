@@ -158,7 +158,12 @@ anything but a dark mode (or to avoid late night *flash bang out*s)
 
 Page theme follows system/browser theme
 
-![Alt text](docs/light-mode.png)
+<details>
+  <summary>Screenshots 📸</summary>
+
+![Light mode](docs/light-mode.png)
+
+</details>
 
 ## Deployment 🚢
 
@@ -216,4 +221,4 @@ Steps:
 
 [^1]:
     Verify there is an "orange cloud" on the dashboard for the domain you intend to use. See
-    [docs/orange-cloud.png](docs/orange-cloud.png).
+    [docs/orange-cloud.png](https://github.com/OutdatedVersion/cloudflare-request-shadowing/blob/main/docs/orange-cloud.png).
