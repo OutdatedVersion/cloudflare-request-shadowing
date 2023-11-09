@@ -8,11 +8,7 @@ workers_dev = false
 mode = "smart"
 
 [vars]
-DB_USERNAME = ""
-DB_HOST = ""
-DB_PORT = "5432"
-DB_NAME = "request_shadowing"
 AUTH_AUD_CLAIM = ""
 AUTH_TEAM_NAME = ""
-# DB_PASSWORD
+# DATABASE_CONNECTION_STRING
 # ENCRYPTION_SECRET
