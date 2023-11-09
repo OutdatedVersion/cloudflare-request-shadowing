@@ -235,7 +235,7 @@ const triggerAndProcessShadow = async (
 
   await client.query(
     `INSERT INTO
-      new_requests
+      requests
      (
         id,
         parent_id,
