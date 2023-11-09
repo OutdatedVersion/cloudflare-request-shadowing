@@ -164,5 +164,5 @@ This tool is
 <!-- <img width="748" alt="image-1" src="https://user-images.githubusercontent.com/11138610/279465640-20aced59-3c55-43ba-8775-d0849048dfab.png"> -->
 
 [^1]:
-    Verify there is an "orange cloud" on the dashboard for the domain you intend to use.
-    ![See docs/orange-cloud.png for visual](docs/orange-cloud.png)
+    Verify there is an "orange cloud" on the dashboard for the domain you intend to use. See
+    [docs/orange-cloud.png](docs/orange-cloud.png).
