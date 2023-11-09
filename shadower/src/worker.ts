@@ -1,4 +1,4 @@
-import { Client } from "pg";
+import { Client, ClientConfig } from "pg";
 import {
   Delta,
   create,
@@ -132,14 +132,13 @@ const getResponseBody = (res: Response) => {
 };
 
 const getClient = async (env: Env) => {
-  const config = {
-    user: env.DB_USERNAME,
-    password: env.DB_PASSWORD,
-    host: env.DB_HOST,
-    port: parseInt(env.DB_PORT, 10),
-    database: env.DB_NAME,
-  } as const;
-  const client = new Client(config);
+  const url = new URL(env.DATABASE_CONNECTION_STRING);
+  console.log("Connecting to database", {
+    connectionString: url.toString().replace(url.password, "******"),
+  });
+  const client = new Client({
+    connectionString: url.toString(),
+  });
   await client.connect();
   return client;
 };
@@ -236,7 +235,7 @@ const triggerAndProcessShadow = async (
 
   await client.query(
     `INSERT INTO
-      new_requests
+      requests
      (
         id,
         parent_id,

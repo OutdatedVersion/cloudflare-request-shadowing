@@ -1,6 +1,6 @@
 CREATE TABLE requests(
 	id uuid NOT NULL PRIMARY KEY,
-	parent_id uuid references new_requests(id),
+	parent_id uuid references requests(id),
 	created_at timestamp default now(),
 
 	tags jsonb,
@@ -19,7 +19,6 @@ CREATE TABLE requests(
 	-- encrypted
 	-- null for 204?
 	control_res_body jsonb,
-	--- timings
 	control_started_at timestamp NOT NULL,
 	control_ended_at timestamp NOT NULL,
 	-----------------------------
@@ -31,7 +30,6 @@ CREATE TABLE requests(
 	-- encrypted
 	-- null for 204?
 	shadow_res_body jsonb,
-	--- timings
 	shadow_started_at timestamp NOT NULL,
 	shadow_ended_at timestamp NOT NULL
 );

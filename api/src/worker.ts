@@ -20,11 +20,7 @@ import {
 } from "@local/schema";
 
 export interface IdkEnv {
-  DB_USERNAME: string;
-  DB_PASSWORD: string;
-  DB_HOST: string;
-  DB_PORT: string;
-  DB_NAME: string;
+  DATABASE_CONNECTION_STRING: string;
   DB_HYPERDRIVE?: Hyperdrive;
   ENCRYPTION_SECRET: string;
   AUTH_TEAM_NAME: string;
@@ -127,14 +123,15 @@ const getMirrorAggregation = async (
 const getDatabase = (env: IdkEnv) => {
   const config: PoolConfig = {
     max: 1,
-    user: env.DB_HYPERDRIVE?.user ?? env.DB_USERNAME,
-    password: env.DB_HYPERDRIVE?.password ?? env.DB_PASSWORD,
-    host: env.DB_HYPERDRIVE?.host ?? env.DB_HOST,
-    port: parseInt(env.DB_HYPERDRIVE?.port ?? env.DB_PORT, 10),
-    database: env.DB_HYPERDRIVE?.database ?? env.DB_NAME,
+    connectionString:
+      env.DB_HYPERDRIVE?.connectionString ?? env.DATABASE_CONNECTION_STRING,
   };
 
-  console.log("Connecting to database", { ...config, password: undefined });
+  const url = new URL(config.connectionString!);
+
+  console.log("Connecting to database", {
+    connectionString: url.toString().replace(url.password, "******"),
+  });
   return new Kysely<RequestShadowingDatabase>({
     dialect: new PostgresDialect({
       pool: new Pool(config),

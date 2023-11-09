@@ -2,13 +2,17 @@
 
 Transparently send requests from one URL to another.
 
-- Little to no overhead 🚗💨
-  - Shadowing occurs after the original request completes keeping your latency sensitive services happy
-- Replay requests 🔁
-- Automatic grouping 🥅
+- Little to no overhead 🤝
+  - Shadowing occurs after the original request's response is sent back to the client--keeping your latency sensitive services happy
 - Flexible configuration 🔨
-  - Combine Workers' `routes` configuration and JavaScript to
-- Tagging 🏷️
+  - Combine Workers' `routes` configuration and JavaScript
+- [At-rest data encryption](#privacy--encryption-) 🔒
+- [Replay requests](#replays-) 🔁
+- [Automatic grouping](#automatic-grouping-) 🥅
+- [Tagging](#tagging-) 🏷️
+- [Export](#export-) 📦
+- [Themed interface](#light-and-dark-themes) ☀️🌕
+- [Sharable links (group work in mind)](#sharable-urls)
 
 > [!NOTE]  
 > You'll need to use Cloudflare as a reverse proxy[^1] to run this!
@@ -20,6 +24,10 @@ https://github.com/OutdatedVersion/cloudflare-request-shadowing/assets/11138610/
 ### First class JSON diffs 👀
 
 Compare JSON responses without inconsequential diffs.
+
+- Objects: Properties can be moved but their value cannot change
+- Arrays: Entries cannot move or change value
+  - Moves are tracked separately from deletions/additions
 
 <details> 
   <summary>Screenshots 📸</summary>
@@ -67,7 +75,7 @@ in the aggregation graph under "Total"s though.
 
 </details>
 
-### Export 📋
+### Export 📦
 
 Quickly export saved responses for use fixtures elsewhere.
 
@@ -116,7 +124,7 @@ Comfortably process requests knowing exactly what code is running with at-rest e
   - Response status code 🚫
 - Tags 🚫
 
-See [schema](api/src/schema.ts) as aggregation point on how data is saved
+See [schema](schema/src/lib.ts)/[table](./tables.sql) for a rough idea on data structure
 
 \* Using a 256 bit AES-GCM key derived, from a secret of your choice, using PBKDF2. See [source code](encryption/src/lib.ts) for implementation.
 
@@ -152,17 +160,38 @@ Page theme follows system/browser theme
 
 ## Deployment 🚢
 
-Deployment/configuration guide WIP 🏗️
+You are responsible for deploying and operating this tool. I'll do what I can
+to answer questions and provide guides though. 🙂
 
-You will deploy and run this tool yourself.
+There are 3 runtime components:
 
-- A Postgres server
--
+- `shadower`: Forwards original (aka control) requests, sends shadow request, compares responses, and saves output to database
+- `api`: Pull records from database
+  - Note: I had originally only separated this as Pages' Workers struggled with Node.js compatibility on (for `pg` module) which may no longer be the case. At this point, I like the boundary.
+- `web`: Front-end to `api` rendering diffs (skip for bring-your-own-interface)
 
-This tool is
+### How to
+
+What to bring:
+
+- Postgres server
+  - Sizing is relative to expected load
+    - Anecdotally: We've been running AWS' Aurora Serverless with 4 APU at 4/rps (20/rps burst) without breaking 25% database load.
+- Cloudflare account
+
+1. Git clone or download project
+2. Setup Cloudflare Access for the domain you'll host the web interface on
+   - This will likely be `project-name.pages.dev` where `project-name` is in `deploy` of [these scripts](./web/package.json)
+3. `npm ci`: Install setup script dependencies
+4. `node setup.mjs`: Run setup script
+   - Alternatively, do what [setup.mjs](./setup.mjs) is doing by hand
+5. Adjust `getShadowingConfigForUrl` in [shadower](./shadower/src/worker.ts)
+   - See option documentation under `ShadowingConfig` type
+6. Adjust `routes` in [shadower wrangler.toml](./shadower/wrangler.toml)
+7. Deploy shadower (`npm run deploy` in `shadower`)
 
 <!-- <img width="748" alt="image-1" src="https://user-images.githubusercontent.com/11138610/279465640-20aced59-3c55-43ba-8775-d0849048dfab.png"> -->
 
 [^1]:
-    Verify there is an "orange cloud" on the dashboard for the domain you intend to use.
-    ![See docs/orange-cloud.png for visual](docs/orange-cloud.png)
+    Verify there is an "orange cloud" on the dashboard for the domain you intend to use. See
+    [docs/orange-cloud.png](docs/orange-cloud.png).
