@@ -34,5 +34,7 @@ CREATE TABLE requests(
 	shadow_ended_at timestamp NOT NULL
 );
 
+-- See docs/database-explain-parent-id-with.png
+-- See docs/database-explain-parent-id-without.png
 CREATE INDEX idx_requests_parent_id ON public.requests USING btree (parent_id)
 CREATE INDEX idx_requests_created_at_covering ON public.requests USING btree (created_at, diff_paths) INCLUDE (id, tags, diff_added_count, diff_removed_count, control_req_url, control_res_http_status, shadow_req_url, shadow_res_http_status)
