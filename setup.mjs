@@ -186,6 +186,17 @@ process.on('beforeExit', async () => {
   }
 });
 
+for (const project of ['api', 'web']) {
+  const spinner = ora({
+    text: `${project}: Deploying`,
+    indent: 2,
+  }).start();
+  execSync(`npm run deploy`, {
+    cwd: project,
+  });
+  spinner.stopAndPersist({ suffixText: '✔️' });
+}
+
 for (const project of ['api', 'shadower']) {
   const spinner = ora({
     text: `${project}: Setting secrets`,

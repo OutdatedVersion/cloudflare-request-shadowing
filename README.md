@@ -179,7 +179,16 @@ What to bring:
     - Anecdotally: We've been running AWS' Aurora Serverless with 4 APU at 4/rps (20/rps burst) without breaking 25% database load.
 - Cloudflare account
 
-We're going to go through a happy path setup. You could tweak `wrangler.toml`s and/or code to run your own way though.
+1. Git clone or download project
+2. Setup Cloudflare Access for the domain you'll host the web interface on
+   - This will likely be `project-name.pages.dev` where `project-name` is in `deploy` of [these scripts](./web/package.json)
+3. `npm ci`: Install setup script dependencies
+4. `node setup.mjs`: Run setup script
+   - Alternatively, do what [setup.mjs](./setup.mjs) is doing by hand
+5. Adjust `getShadowingConfigForUrl` in [shadower](./shadower/src/worker.ts)
+   - See option documentation under `ShadowingConfig` type
+6. Adjust `routes` in [shadower wrangler.toml](./shadower/wrangler.toml)
+7. Deploy shadower (`npm run deploy` in `shadower`)
 
 <!-- <img width="748" alt="image-1" src="https://user-images.githubusercontent.com/11138610/279465640-20aced59-3c55-43ba-8775-d0849048dfab.png"> -->
 
