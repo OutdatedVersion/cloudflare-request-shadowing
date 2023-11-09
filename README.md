@@ -5,8 +5,6 @@ Transparently send requests from one URL to another with output comparison.
 Test for API compatibility, of any size change, to HTTP endpoints without expensive manual testing or disrupting production traffic. This is intended to _complement_ automated testing
 suites by bringing that extra few feet of confidence in changes.
 
-For example, you are throwing in the towel on breathing life into an existing service with a rewrite. Shadow traffic from the old service to the new service to test compatibility. When you're no longer seeing unexpected divergences in responses, switch over traffic! (probably with flags/canaries to be safe)
-
 https://github.com/OutdatedVersion/cloudflare-request-shadowing/assets/11138610/ce86df78-8534-4e19-99ae-601559a2f658
 
 ## Summary
