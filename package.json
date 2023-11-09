@@ -1,0 +1,9 @@
+{
+  "name": "cloudflare-request-shadowing",
+  "private": true,
+  "devDependencies": {
+    "@types/node": "^18.18.9",
+    "inquirer": "^9.2.12",
+    "ora": "^7.0.1"
+  }
+}
