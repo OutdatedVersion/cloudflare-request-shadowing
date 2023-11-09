@@ -116,7 +116,7 @@ Comfortably process requests knowing exactly what code is running with at-rest e
   - Response status code 🚫
 - Tags 🚫
 
-See [schema](api/src/schema.ts) as aggregation point on how data is saved
+See [schema](schema/src/lib.ts)/[table](./tables.sql) for a rough idea on data structure
 
 \* Using a 256 bit AES-GCM key derived, from a secret of your choice, using PBKDF2. See [source code](encryption/src/lib.ts) for implementation.
 
