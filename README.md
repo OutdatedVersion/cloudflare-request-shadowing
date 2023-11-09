@@ -1,6 +1,15 @@
 # Cloudflare request shadowing 🥷🚧
 
-Transparently send requests from one URL to another.
+Transparently send requests from one URL to another with output comparison.
+
+Test for API compatibility, of any size change, to HTTP endpoints without expensive manual testing or disrupting production traffic. This is intended to _complement_ automated testing
+suites by bringing that extra few feet of confidence in changes.
+
+For example, you are throwing in the towel on breathing life into an existing service with a rewrite. Shadow traffic from the old service to the new service to test compatibility. When you're no longer seeing unexpected divergences in responses, switch over traffic! (probably with flags/canaries to be safe)
+
+https://github.com/OutdatedVersion/cloudflare-request-shadowing/assets/11138610/ce86df78-8534-4e19-99ae-601559a2f658
+
+## Summary
 
 - Little to no overhead 🤝
   - Shadowing occurs after the original request's response is sent back to the client--keeping your latency sensitive services happy
@@ -14,12 +23,7 @@ Transparently send requests from one URL to another.
 - [Themed interface](#light-and-dark-themes) ☀️🌕
 - [Sharable links (group work in mind)](#sharable-urls)
 
-> [!NOTE]  
-> You'll need to use Cloudflare as a reverse proxy[^1] to run this!
-
 ## 📋 / 📸
-
-https://github.com/OutdatedVersion/cloudflare-request-shadowing/assets/11138610/ce86df78-8534-4e19-99ae-601559a2f658
 
 ### First class JSON diffs 👀
 
@@ -160,6 +164,9 @@ Page theme follows system/browser theme
 
 ## Deployment 🚢
 
+> [!NOTE]  
+> You'll need to use Cloudflare as a reverse proxy[^1] to run this!
+
 You are responsible for deploying and operating this tool. I'll do what I can
 to answer questions and provide guides though. 🙂
 
@@ -178,6 +185,8 @@ What to bring:
   - Sizing is relative to expected load
     - Anecdotally: We've been running AWS' Aurora Serverless with 4 APU at 4/rps (20/rps burst) without breaking 25% database load.
 - Cloudflare account
+
+Steps:
 
 1. Git clone or download project
 2. Setup Cloudflare Access for the domain you'll host the web interface on
