@@ -11,9 +11,3 @@ routes = [
 
 [placement]
 mode = "smart"
-
-[vars]
-DB_USERNAME = ""
-DB_HOST = ""
-DB_PORT = "5432"
-DB_NAME = "request_mirroring"
