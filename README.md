@@ -5,8 +5,6 @@ Transparently send requests from one URL to another with output comparison.
 Test for API compatibility, of any size change, to HTTP endpoints without expensive manual testing or disrupting production traffic. This is intended to _complement_ automated testing
 suites by bringing that extra few feet of confidence in changes.
 
-For example, you are throwing in the towel on breathing life into an existing service with a rewrite. Shadow traffic from the old service to the new service to test compatibility. When you're no longer seeing unexpected divergences in responses, switch over traffic! (probably with flags/canaries to be safe)
-
 https://github.com/OutdatedVersion/cloudflare-request-shadowing/assets/11138610/ce86df78-8534-4e19-99ae-601559a2f658
 
 ## Summary
@@ -160,7 +158,12 @@ anything but a dark mode (or to avoid late night *flash bang out*s)
 
 Page theme follows system/browser theme
 
-![Alt text](docs/light-mode.png)
+<details>
+  <summary>Screenshots 📸</summary>
+
+![Light mode](docs/light-mode.png)
+
+</details>
 
 ## Deployment 🚢
 
@@ -182,6 +185,8 @@ There are 3 runtime components:
 What to bring:
 
 - Postgres server
+  - Any reasonably recent version should do
+    - `jsonb` + its operators are the only "hasn't been in Postgres for a few decades" features in use
   - Sizing is relative to expected load
     - Anecdotally: We've been running AWS' Aurora Serverless with 4 APU at 4/rps (20/rps burst) without breaking 25% database load.
 - Cloudflare account
@@ -191,16 +196,29 @@ Steps:
 1. Git clone or download project
 2. Setup Cloudflare Access for the domain you'll host the web interface on
    - This will likely be `project-name.pages.dev` where `project-name` is in `deploy` of [these scripts](./web/package.json)
-3. `npm ci`: Install setup script dependencies
-4. `node setup.mjs`: Run setup script
+3. [Create database, table, and user](#database)
+4. `npm ci`: Install setup script dependencies
+5. `node setup.mjs`: Run setup script
    - Alternatively, do what [setup.mjs](./setup.mjs) is doing by hand
-5. Adjust `getShadowingConfigForUrl` in [shadower](./shadower/src/worker.ts)
+6. Adjust `getShadowingConfigForUrl` in [shadower](./shadower/src/worker.ts)
    - See option documentation under `ShadowingConfig` type
-6. Adjust `routes` in [shadower wrangler.toml](./shadower/wrangler.toml)
-7. Deploy shadower (`npm run deploy` in `shadower`)
+7. Adjust `routes` in [shadower wrangler.toml](./shadower/wrangler.toml)
+8. Deploy shadower (`npm run deploy` in `shadower`)
 
-<!-- <img width="748" alt="image-1" src="https://user-images.githubusercontent.com/11138610/279465640-20aced59-3c55-43ba-8775-d0849048dfab.png"> -->
+### Database
+
+1. Create database: `CREATE DATABASE request_shadowing`
+2. Verify `gen_random_uuid` is available: `SELECT gen_random_uuid();`
+   - Enable `uuid-ossp` if not: `CREATE EXTENSION uuid-ossp`
+3. Create tables and indices
+   - Run [tables.sql](./tables.sql)
+   - Open up an issue with your use-case and index if you end up adding your own/replacing the out-of-box ones! 💙
+4. Create user
+   - Least amount of privileges possible. It doesn't do anything special.
+5. Setup permissions for user
+   - `GRANT SELECT, INSERT, UPDATE, REFERENCES ON requests TO user;`
+6. Good to go!
 
 [^1]:
     Verify there is an "orange cloud" on the dashboard for the domain you intend to use. See
-    [docs/orange-cloud.png](docs/orange-cloud.png).
+    [docs/orange-cloud.png](https://github.com/OutdatedVersion/cloudflare-request-shadowing/blob/main/docs/orange-cloud.png).
