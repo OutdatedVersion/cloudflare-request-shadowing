@@ -340,7 +340,7 @@ export default {
     // supporting underlying services acting on this header. So, let's
     // not leak it in the first place.
     const headers = new Headers(request.headers);
-    headers.delete("shadowing-private-id");
+    headers.delete("shadowing-parent-id");
     request = new Request(request, {
       headers,
     });
