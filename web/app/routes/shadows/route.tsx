@@ -250,21 +250,21 @@ export default function MirrorsList() {
                           return null;
                         }
 
-                        const idk = payload[0].payload as (typeof data)[number];
+                        const row = payload[0].payload as (typeof data)[number];
                         const pct =
-                          idk.total !== 0 &&
-                          ` ${((idk.divergent / idk.total) * 100).toFixed(
+                          row.total !== 0 &&
+                          ` ${((row.divergent / row.total) * 100).toFixed(
                             0,
                           )}% divergent`;
 
                         return (
                           <div className="p-2 bg-gray-200 rounded-sm text-black">
                             <div className="font-bold">
-                              {format(parseISO(idk.start), 'h:mmaaa')} to{' '}
-                              {format(parseISO(idk.end), 'h:mmaaa')}
+                              {format(parseISO(row.start), 'h:mmaaa')} to{' '}
+                              {format(parseISO(row.end), 'h:mmaaa')}
                             </div>
-                            <div className="mt-1.5">Total: {idk.total}</div>
-                            <div>Divergent: {idk.divergent}</div>
+                            <div className="mt-1.5">Total: {row.total}</div>
+                            <div>Divergent: {row.divergent}</div>
                             <div className="mt-1.5">{pct}</div>
                           </div>
                         );
