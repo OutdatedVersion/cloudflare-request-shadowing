@@ -1,160 +1,25 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { getCookie } from "hono/cookie";
 import { HTTPException } from "hono/http-exception";
-import { Pool, PoolConfig } from "pg";
-import set from "date-fns/set";
-import subMinutes from "date-fns/subMinutes";
-import { Kysely, PostgresDialect, sql } from "kysely";
-import isBefore from "date-fns/isBefore";
-import isAfter from "date-fns/isAfter";
-import { z } from "zod";
-import { JWTPayload, createRemoteJWKSet, jwtVerify } from "jose";
+import { sql } from "kysely";
+import { JWTPayload } from "jose";
 import { generateKey, decrypt } from "@local/encryption";
 import partition from "lodash/partition";
 import {
   PublicApi,
-  PublicRequest,
   EncryptedRequestTable,
   DecryptedRequestTable,
 } from "@local/schema";
-
-export interface IdkEnv {
-  DATABASE_CONNECTION_STRING: string;
-  DB_HYPERDRIVE?: Hyperdrive;
-  ENCRYPTION_SECRET: string;
-  AUTH_TEAM_NAME: string;
-  AUTH_AUD_CLAIM: string;
-  [other: string]: unknown;
-}
-
-interface RequestShadowingDatabase {
-  requests: EncryptedRequestTable;
-}
-
-const serverTiming = (
-  entries: Array<{ name: string; dur: number | string; desc?: string }>,
-) => {
-  return {
-    "server-timing": entries
-      .map(({ name, desc, dur }) => {
-        let value = `${name};dur=${dur}`;
-        if (desc) {
-          value += `;desc=${desc}`;
-        }
-        return value;
-      })
-      .join(", "),
-  };
-};
-
-const getMirrorAggregation = async (
-  db: Kysely<RequestShadowingDatabase>,
-  {
-    lookbackPeriodHours,
-    rollupPeriodMinutes,
-    tags,
-  }: {
-    lookbackPeriodHours: number;
-    rollupPeriodMinutes: number;
-    tags?: Record<string, string[]>;
-  },
-) => {
-  let incompleteTotalsQuery = db
-    .selectFrom("requests")
-    .select((eb) => eb.fn.countAll().as("total"))
-    .select(
-      sql<string>`sum(case when diff_paths is not null then 1 else 0 end)`.as(
-        "divergent",
-      ),
-    )
-    .select(
-      sql<Date>`date_bin(${`${rollupPeriodMinutes} minutes`}::interval, created_at, now() - ${`${lookbackPeriodHours} hours`}::interval)`.as(
-        "bin",
-      ),
-    )
-    .where(
-      sql`now() - ${`${lookbackPeriodHours} hours`}::interval <= created_at`,
-    );
-
-  for (const [tag, values] of Object.entries(tags ?? {})) {
-    incompleteTotalsQuery = incompleteTotalsQuery.where((eb) =>
-      eb.or(values.map((value) => sql`tags ->> ${tag}::text = ${value}::text`)),
-    );
-  }
-
-  incompleteTotalsQuery = incompleteTotalsQuery
-    .groupBy("bin")
-    .orderBy("bin", "desc");
-
-  const incompleteTotals = await incompleteTotalsQuery.execute();
-
-  return Array((lookbackPeriodHours * 60) / rollupPeriodMinutes)
-    .fill(undefined)
-    .map((_, idx, arr) => {
-      const start = set(
-        subMinutes(new Date(), rollupPeriodMinutes * (idx + 1)),
-        {
-          seconds: 0,
-          milliseconds: 0,
-        },
-      );
-      const end = set(subMinutes(new Date(), rollupPeriodMinutes * idx), {
-        seconds: 0,
-        milliseconds: 0,
-      });
-      const bin = subMinutes(start, Math.floor(rollupPeriodMinutes / 2));
-
-      const match = incompleteTotals.find(
-        (t) => isBefore(t.bin, end) && isAfter(t.bin, start),
-      );
-
-      return {
-        start,
-        bin,
-        end,
-        total: match ? parseInt(match.total, 10) : 0,
-        divergent: match ? parseInt(match.divergent, 10) : 0,
-      };
-    })
-    .reverse();
-};
-
-const getDatabase = (env: IdkEnv) => {
-  const config: PoolConfig = {
-    max: 1,
-    connectionString:
-      env.DB_HYPERDRIVE?.connectionString ?? env.DATABASE_CONNECTION_STRING,
-  };
-
-  const url = new URL(config.connectionString!);
-
-  console.log("Connecting to database", {
-    connectionString: url.toString().replace(url.password, "******"),
-  });
-  return new Kysely<RequestShadowingDatabase>({
-    dialect: new PostgresDialect({
-      pool: new Pool(config),
-    }),
-  });
-};
-
-let _jwk: ReturnType<typeof createRemoteJWKSet>;
-const getJsonWebKeyProvider = (env: IdkEnv) => {
-  if (_jwk) {
-    return _jwk;
-  }
-
-  _jwk = createRemoteJWKSet(
-    new URL(
-      `https://${env.AUTH_TEAM_NAME}.cloudflareaccess.com/cdn-cgi/access/certs`,
-    ),
-  );
-  return _jwk;
-};
+import { WorkerEnv } from "./env";
+import { getDatabase } from "./repository/database";
+import { serverTiming } from "./helpers/server-timing-header";
+import { fetchAndAggregateRequests } from "./repository/aggregation";
+import { databaseToPublicSchema } from "./repository/orm";
+import { cloudflareAccessAuth } from "./middleware/auth";
+import { parseTags } from "./helpers/tags";
 
 const router = new Hono<{
-  Bindings: IdkEnv;
+  Bindings: WorkerEnv;
   Variables: {
     tokenClaims: JWTPayload;
   };
@@ -187,54 +52,7 @@ router.use(
     ],
   }),
 );
-// https://developers.cloudflare.com/cloudflare-one/identity/authorization-cookie/validating-json/
-router.use("*", async (ctx, next) => {
-  const token = (
-    getCookie(ctx, "CF_Authorization") ??
-    ctx.req.header("Cf-Access-Jwt-Assertion")
-  )?.trim();
-
-  if (!token) {
-    return ctx.json(
-      {
-        name: "Unauthorized",
-        message: "Cookie/header missing",
-      },
-      { status: 401 },
-    );
-  }
-
-  try {
-    const { payload } = await jwtVerify(
-      token,
-      // Since we're relying on network effects to update system
-      // time it's likely we'll deny some requests from a stale JWK cache.
-      getJsonWebKeyProvider(ctx.env),
-      {
-        issuer: `https://${ctx.env.AUTH_TEAM_NAME}.cloudflareaccess.com`,
-        audience: ctx.env.AUTH_AUD_CLAIM,
-      },
-    );
-
-    ctx.set("tokenClaims", payload);
-  } catch (error) {
-    return ctx.json(
-      {
-        name: "Unauthorized",
-        message: "Malformed token",
-        cause: {
-          name: (error as Error).name,
-          message: (error as Error).message,
-        },
-      },
-      {
-        status: 401,
-      },
-    );
-  }
-
-  await next();
-});
+router.use("*", cloudflareAccessAuth);
 
 router.get("/shadows/aggregation", async (ctx) => {
   const url = new URL(ctx.req.url);
@@ -242,24 +60,9 @@ router.get("/shadows/aggregation", async (ctx) => {
   const start = Date.now();
 
   const errors: string[] = [];
-  const tags = (ctx.req.queries().tag ?? [])
-    .filter((entry) => {
-      // Validate tags
-      if (!/^([a-z0-9]+:[a-z0-9-]+)$/i.test(entry)) {
-        errors.push(entry);
-        return false;
-      }
-      return true;
-    })
-    .reduce((entries, entry) => {
-      const [key, value] = entry.toLowerCase().split(":");
-      return {
-        ...entries,
-        [key]: [...(entries[key] ?? []), value],
-      };
-    }, {} as Record<string, string[]>);
+  const { tags, malformedTags } = parseTags(ctx.req.queries().tag ?? []);
 
-  if (errors.length > 0) {
+  if (malformedTags.length > 0) {
     return ctx.json(
       {
         message: "Malformed tags query. e.g. 'key:value'",
@@ -269,7 +72,7 @@ router.get("/shadows/aggregation", async (ctx) => {
     );
   }
 
-  const data = await getMirrorAggregation(getDatabase(ctx.env), {
+  const data = await fetchAndAggregateRequests(getDatabase(ctx.env), {
     rollupPeriodMinutes: parseInt(
       url.searchParams.get("rollupPeriodMinutes") ?? "30",
       10,
@@ -315,24 +118,9 @@ router.get("/shadows", async (ctx) => {
   }
 
   const errors: string[] = [];
-  const tags = (ctx.req.queries().tag ?? [])
-    .filter((entry) => {
-      // Validate tags
-      if (!/^([a-z0-9]+:[a-z0-9-]+)$/i.test(entry)) {
-        errors.push(entry);
-        return false;
-      }
-      return true;
-    })
-    .reduce((entries, entry) => {
-      const [key, value] = entry.toLowerCase().split(":");
-      return {
-        ...entries,
-        [key]: [...(entries[key] ?? []), value],
-      };
-    }, {} as Record<string, string[]>);
+  const { tags, malformedTags } = parseTags(ctx.req.queries().tag ?? []);
 
-  if (errors.length > 0) {
+  if (malformedTags.length > 0) {
     return ctx.json(
       {
         message: "Malformed tags query. e.g. 'key:value'",
@@ -416,51 +204,6 @@ const decryptRequest = async ({
   return decrypted;
 };
 
-// "mom, can we get ORM?"
-// "we have ORM at home":
-const databaseToPublicSchema = (req: DecryptedRequestTable): PublicRequest => {
-  return {
-    id: req.id,
-    created_at: req.created_at.toISOString(),
-    tags: req.tags,
-    diff:
-      req.diff_added_count !== null &&
-      req.diff_removed_count !== null &&
-      req.diff_paths
-        ? {
-            added: req.diff_added_count,
-            removed: req.diff_removed_count,
-            paths: req.diff_paths,
-            patches: req.diff_patches,
-          }
-        : null,
-    control: {
-      request: {
-        url: req.control_req_url,
-        method: req.control_req_method,
-        headers: req.control_req_headers,
-      },
-      response: {
-        status: req.control_res_http_status,
-        body: req.control_res_body,
-      },
-    },
-    shadow: {
-      request: {
-        url: req.shadow_req_url,
-        method: req.shadow_req_method,
-        // 🤠
-        headers: req.control_req_headers,
-      },
-      response: {
-        status: req.shadow_res_http_status,
-        body: req.shadow_res_body,
-        headers: req.shadow_res_headers,
-      },
-    },
-  };
-};
-
 router.get("/shadows/:id", async (ctx) => {
   const id = ctx.req.param("id");
 
@@ -474,7 +217,7 @@ router.get("/shadows/:id", async (ctx) => {
 
   if (requests.length <= 0) {
     return ctx.json(
-      { message: "No such mirror", data: { id } },
+      { message: "No such shadow found", data: { id } },
       { status: 404 },
     );
   }
