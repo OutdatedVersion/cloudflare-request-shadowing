@@ -17,15 +17,7 @@ import {
   EncryptedRequestTable,
   DecryptedRequestTable,
 } from "@local/schema";
-
-export interface WorkerEnv {
-  DATABASE_CONNECTION_STRING: string;
-  DB_HYPERDRIVE?: Hyperdrive;
-  ENCRYPTION_SECRET: string;
-  AUTH_TEAM_NAME: string;
-  AUTH_AUD_CLAIM: string;
-  [other: string]: unknown;
-}
+import { WorkerEnv } from "./env";
 
 interface RequestShadowingDatabase {
   requests: EncryptedRequestTable;
@@ -473,7 +465,7 @@ router.get("/shadows/:id", async (ctx) => {
 
   if (requests.length <= 0) {
     return ctx.json(
-      { message: "No such mirror", data: { id } },
+      { message: "No such shadow found", data: { id } },
       { status: 404 },
     );
   }
