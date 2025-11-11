@@ -1,6 +1,5 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { getCookie } from "hono/cookie";
 import { HTTPException } from "hono/http-exception";
 import { sql } from "kysely";
 import { JWTPayload, createRemoteJWKSet, jwtVerify } from "jose";
@@ -16,22 +15,7 @@ import { getDatabase } from "./repository/database";
 import { serverTiming } from "./helpers/server-timing-header";
 import { fetchAndAggregateRequests } from "./repository/aggregation";
 import { databaseToPublicSchema } from "./repository/orm";
-
-let _jwk: ReturnType<typeof createRemoteJWKSet>;
-const getJsonWebKeyProvider = (env: WorkerEnv) => {
-  // note: it's possible we'll become out-of-date due to a lack of
-  // cache invalidation and long lived worker instances
-  if (_jwk) {
-    return _jwk;
-  }
-
-  _jwk = createRemoteJWKSet(
-    new URL(
-      `https://${env.AUTH_TEAM_NAME}.cloudflareaccess.com/cdn-cgi/access/certs`,
-    ),
-  );
-  return _jwk;
-};
+import { cloudflareAccessAuth } from "./middleware/auth";
 
 const router = new Hono<{
   Bindings: WorkerEnv;
@@ -67,48 +51,7 @@ router.use(
     ],
   }),
 );
-// https://developers.cloudflare.com/cloudflare-one/identity/authorization-cookie/validating-json/
-router.use("*", async (ctx, next) => {
-  const token = (
-    getCookie(ctx, "CF_Authorization") ??
-    ctx.req.header("Cf-Access-Jwt-Assertion")
-  )?.trim();
-
-  if (!token) {
-    return ctx.json(
-      {
-        name: "Unauthorized",
-        message: "Cookie/header missing",
-      },
-      { status: 401 },
-    );
-  }
-
-  try {
-    const { payload } = await jwtVerify(token, getJsonWebKeyProvider(ctx.env), {
-      issuer: `https://${ctx.env.AUTH_TEAM_NAME}.cloudflareaccess.com`,
-      audience: ctx.env.AUTH_AUD_CLAIM,
-    });
-
-    ctx.set("tokenClaims", payload);
-  } catch (error) {
-    return ctx.json(
-      {
-        name: "Unauthorized",
-        message: "Malformed token",
-        cause: {
-          name: (error as Error).name,
-          message: (error as Error).message,
-        },
-      },
-      {
-        status: 401,
-      },
-    );
-  }
-
-  await next();
-});
+router.use("*", cloudflareAccessAuth);
 
 router.get("/shadows/aggregation", async (ctx) => {
   const url = new URL(ctx.req.url);
