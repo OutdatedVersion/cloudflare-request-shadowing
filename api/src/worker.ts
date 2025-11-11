@@ -16,6 +16,7 @@ import { serverTiming } from "./helpers/server-timing-header";
 import { fetchAndAggregateRequests } from "./repository/aggregation";
 import { databaseToPublicSchema } from "./repository/orm";
 import { cloudflareAccessAuth } from "./middleware/auth";
+import { parseTags } from "./helpers/tags";
 
 const router = new Hono<{
   Bindings: WorkerEnv;
@@ -59,24 +60,9 @@ router.get("/shadows/aggregation", async (ctx) => {
   const start = Date.now();
 
   const errors: string[] = [];
-  const tags = (ctx.req.queries().tag ?? [])
-    .filter((entry) => {
-      // Validate tags
-      if (!/^([a-z0-9]+:[a-z0-9-]+)$/i.test(entry)) {
-        errors.push(entry);
-        return false;
-      }
-      return true;
-    })
-    .reduce((entries, entry) => {
-      const [key, value] = entry.toLowerCase().split(":");
-      return {
-        ...entries,
-        [key]: [...(entries[key] ?? []), value],
-      };
-    }, {} as Record<string, string[]>);
+  const { tags, malformedTags } = parseTags(ctx.req.queries().tag ?? []);
 
-  if (errors.length > 0) {
+  if (malformedTags.length > 0) {
     return ctx.json(
       {
         message: "Malformed tags query. e.g. 'key:value'",
@@ -132,24 +118,9 @@ router.get("/shadows", async (ctx) => {
   }
 
   const errors: string[] = [];
-  const tags = (ctx.req.queries().tag ?? [])
-    .filter((entry) => {
-      // Validate tags
-      if (!/^([a-z0-9]+:[a-z0-9-]+)$/i.test(entry)) {
-        errors.push(entry);
-        return false;
-      }
-      return true;
-    })
-    .reduce((entries, entry) => {
-      const [key, value] = entry.toLowerCase().split(":");
-      return {
-        ...entries,
-        [key]: [...(entries[key] ?? []), value],
-      };
-    }, {} as Record<string, string[]>);
+  const { tags, malformedTags } = parseTags(ctx.req.queries().tag ?? []);
 
-  if (errors.length > 0) {
+  if (malformedTags.length > 0) {
     return ctx.json(
       {
         message: "Malformed tags query. e.g. 'key:value'",
