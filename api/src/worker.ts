@@ -95,6 +95,8 @@ const getMirrorAggregation = async (
 
 let _jwk: ReturnType<typeof createRemoteJWKSet>;
 const getJsonWebKeyProvider = (env: WorkerEnv) => {
+  // note: it's possible we'll become out-of-date due to a lack of
+  // cache invalidation and long lived worker instances
   if (_jwk) {
     return _jwk;
   }
@@ -159,16 +161,10 @@ router.use("*", async (ctx, next) => {
   }
 
   try {
-    const { payload } = await jwtVerify(
-      token,
-      // Since we're relying on network effects to update system
-      // time it's likely we'll deny some requests from a stale JWK cache.
-      getJsonWebKeyProvider(ctx.env),
-      {
-        issuer: `https://${ctx.env.AUTH_TEAM_NAME}.cloudflareaccess.com`,
-        audience: ctx.env.AUTH_AUD_CLAIM,
-      },
-    );
+    const { payload } = await jwtVerify(token, getJsonWebKeyProvider(ctx.env), {
+      issuer: `https://${ctx.env.AUTH_TEAM_NAME}.cloudflareaccess.com`,
+      audience: ctx.env.AUTH_AUD_CLAIM,
+    });
 
     ctx.set("tokenClaims", payload);
   } catch (error) {
