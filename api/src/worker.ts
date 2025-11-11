@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { HTTPException } from "hono/http-exception";
 import { sql } from "kysely";
-import { JWTPayload, createRemoteJWKSet, jwtVerify } from "jose";
+import { JWTPayload } from "jose";
 import { generateKey, decrypt } from "@local/encryption";
 import partition from "lodash/partition";
 import {
