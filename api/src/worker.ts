@@ -8,7 +8,6 @@ import subMinutes from "date-fns/subMinutes";
 import { Kysely, PostgresDialect, sql } from "kysely";
 import isBefore from "date-fns/isBefore";
 import isAfter from "date-fns/isAfter";
-import { z } from "zod";
 import { JWTPayload, createRemoteJWKSet, jwtVerify } from "jose";
 import { generateKey, decrypt } from "@local/encryption";
 import partition from "lodash/partition";
@@ -19,7 +18,7 @@ import {
   DecryptedRequestTable,
 } from "@local/schema";
 
-export interface IdkEnv {
+export interface WorkerEnv {
   DATABASE_CONNECTION_STRING: string;
   DB_HYPERDRIVE?: Hyperdrive;
   ENCRYPTION_SECRET: string;
@@ -120,7 +119,7 @@ const getMirrorAggregation = async (
     .reverse();
 };
 
-const getDatabase = (env: IdkEnv) => {
+const getDatabase = (env: WorkerEnv) => {
   const config: PoolConfig = {
     max: 1,
     connectionString:
@@ -140,7 +139,7 @@ const getDatabase = (env: IdkEnv) => {
 };
 
 let _jwk: ReturnType<typeof createRemoteJWKSet>;
-const getJsonWebKeyProvider = (env: IdkEnv) => {
+const getJsonWebKeyProvider = (env: WorkerEnv) => {
   if (_jwk) {
     return _jwk;
   }
@@ -154,7 +153,7 @@ const getJsonWebKeyProvider = (env: IdkEnv) => {
 };
 
 const router = new Hono<{
-  Bindings: IdkEnv;
+  Bindings: WorkerEnv;
   Variables: {
     tokenClaims: JWTPayload;
   };
