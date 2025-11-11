@@ -1,10 +1,10 @@
-import { Client, ClientConfig } from "pg";
 import {
   Delta,
   create,
   formatters as diffFormattersIgnore,
 } from "jsondiffpatch";
 import { encrypt, generateKey } from "@local/encryption";
+import { getDatabaseClient } from "./repository/database";
 
 type ShadowingConfig = {
   /**
@@ -131,18 +131,6 @@ const getResponseBody = (res: Response) => {
   }
 };
 
-const getClient = async (env: Env) => {
-  const url = new URL(env.DATABASE_CONNECTION_STRING);
-  console.log("Connecting to database", {
-    connectionString: url.toString().replace(url.password, "******"),
-  });
-  const client = new Client({
-    connectionString: url.toString(),
-  });
-  await client.connect();
-  return client;
-};
-
 const triggerAndProcessShadow = async (
   config: ShadowingConfig,
   env: Env,
@@ -227,7 +215,7 @@ const triggerAndProcessShadow = async (
   console.log("Trying to save");
 
   const databaseClientStart = Date.now();
-  const client = await getClient(env);
+  const client = await getDatabaseClient(env.DATABASE_CONNECTION_STRING);
   console.log("Opened database connection", {
     duration: Date.now() - databaseClientStart,
   });
@@ -318,8 +306,7 @@ const getShadowingConfigForUrl = (url: URL): ShadowingConfig | undefined => {
       percentSampleRate: 100,
       timeout: 5,
       tags: {
-        // contrived example though imagine you have `bwatkins.dev` and `api.develop.internal.bwatkins.dev`
-        // you can whatever logic works for your use-case here!
+        // you can use whatever logic works for your use-case here!
         env: url.hostname === "bwatkins.dev" ? "production" : "develop",
         app: "jaja",
       },
