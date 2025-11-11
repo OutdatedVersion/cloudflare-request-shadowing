@@ -3,7 +3,7 @@ import { Kysely, PostgresDialect } from "kysely";
 import { EncryptedRequestTable } from "@local/schema";
 import { WorkerEnv } from "../env";
 
-interface RequestShadowingDatabase {
+export interface RequestShadowingDatabase {
   requests: EncryptedRequestTable;
 }
 

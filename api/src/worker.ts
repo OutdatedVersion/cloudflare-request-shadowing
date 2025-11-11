@@ -2,12 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { getCookie } from "hono/cookie";
 import { HTTPException } from "hono/http-exception";
-import { Pool, PoolConfig } from "pg";
-import set from "date-fns/set";
-import subMinutes from "date-fns/subMinutes";
-import { Kysely, PostgresDialect, sql } from "kysely";
-import isBefore from "date-fns/isBefore";
-import isAfter from "date-fns/isAfter";
+import { sql } from "kysely";
 import { JWTPayload, createRemoteJWKSet, jwtVerify } from "jose";
 import { generateKey, decrypt } from "@local/encryption";
 import partition from "lodash/partition";
@@ -20,78 +15,7 @@ import {
 import { WorkerEnv } from "./env";
 import { getDatabase } from "./repository/database";
 import { serverTiming } from "./helpers/server-timing-header";
-
-const getMirrorAggregation = async (
-  db: Kysely<RequestShadowingDatabase>,
-  {
-    lookbackPeriodHours,
-    rollupPeriodMinutes,
-    tags,
-  }: {
-    lookbackPeriodHours: number;
-    rollupPeriodMinutes: number;
-    tags?: Record<string, string[]>;
-  },
-) => {
-  let incompleteTotalsQuery = db
-    .selectFrom("requests")
-    .select((eb) => eb.fn.countAll().as("total"))
-    .select(
-      sql<string>`sum(case when diff_paths is not null then 1 else 0 end)`.as(
-        "divergent",
-      ),
-    )
-    .select(
-      sql<Date>`date_bin(${`${rollupPeriodMinutes} minutes`}::interval, created_at, now() - ${`${lookbackPeriodHours} hours`}::interval)`.as(
-        "bin",
-      ),
-    )
-    .where(
-      sql`now() - ${`${lookbackPeriodHours} hours`}::interval <= created_at`,
-    );
-
-  for (const [tag, values] of Object.entries(tags ?? {})) {
-    incompleteTotalsQuery = incompleteTotalsQuery.where((eb) =>
-      eb.or(values.map((value) => sql`tags ->> ${tag}::text = ${value}::text`)),
-    );
-  }
-
-  incompleteTotalsQuery = incompleteTotalsQuery
-    .groupBy("bin")
-    .orderBy("bin", "desc");
-
-  const incompleteTotals = await incompleteTotalsQuery.execute();
-
-  return Array((lookbackPeriodHours * 60) / rollupPeriodMinutes)
-    .fill(undefined)
-    .map((_, idx, arr) => {
-      const start = set(
-        subMinutes(new Date(), rollupPeriodMinutes * (idx + 1)),
-        {
-          seconds: 0,
-          milliseconds: 0,
-        },
-      );
-      const end = set(subMinutes(new Date(), rollupPeriodMinutes * idx), {
-        seconds: 0,
-        milliseconds: 0,
-      });
-      const bin = subMinutes(start, Math.floor(rollupPeriodMinutes / 2));
-
-      const match = incompleteTotals.find(
-        (t) => isBefore(t.bin, end) && isAfter(t.bin, start),
-      );
-
-      return {
-        start,
-        bin,
-        end,
-        total: match ? parseInt(match.total, 10) : 0,
-        divergent: match ? parseInt(match.divergent, 10) : 0,
-      };
-    })
-    .reverse();
-};
+import { fetchAndAggregateRequests } from "./repository/aggregation";
 
 let _jwk: ReturnType<typeof createRemoteJWKSet>;
 const getJsonWebKeyProvider = (env: WorkerEnv) => {
@@ -219,7 +143,7 @@ router.get("/shadows/aggregation", async (ctx) => {
     );
   }
 
-  const data = await getMirrorAggregation(getDatabase(ctx.env), {
+  const data = await fetchAndAggregateRequests(getDatabase(ctx.env), {
     rollupPeriodMinutes: parseInt(
       url.searchParams.get("rollupPeriodMinutes") ?? "30",
       10,
