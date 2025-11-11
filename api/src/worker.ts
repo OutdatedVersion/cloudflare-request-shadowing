@@ -18,10 +18,7 @@ import {
   DecryptedRequestTable,
 } from "@local/schema";
 import { WorkerEnv } from "./env";
-
-interface RequestShadowingDatabase {
-  requests: EncryptedRequestTable;
-}
+import { getDatabase } from "./repository/database";
 
 const serverTiming = (
   entries: Array<{ name: string; dur: number | string; desc?: string }>,
@@ -109,25 +106,6 @@ const getMirrorAggregation = async (
       };
     })
     .reverse();
-};
-
-const getDatabase = (env: WorkerEnv) => {
-  const config: PoolConfig = {
-    max: 1,
-    connectionString:
-      env.DB_HYPERDRIVE?.connectionString ?? env.DATABASE_CONNECTION_STRING,
-  };
-
-  const url = new URL(config.connectionString!);
-
-  console.log("Connecting to database", {
-    connectionString: url.toString().replace(url.password, "******"),
-  });
-  return new Kysely<RequestShadowingDatabase>({
-    dialect: new PostgresDialect({
-      pool: new Pool(config),
-    }),
-  });
 };
 
 let _jwk: ReturnType<typeof createRemoteJWKSet>;
