@@ -1,10 +1,6 @@
-import { Client, ClientConfig } from "pg";
-import {
-  Delta,
-  create,
-  formatters as diffFormattersIgnore,
-} from "jsondiffpatch";
 import { encrypt, generateKey } from "@local/encryption";
+import { getDatabaseClient } from "./repository/database";
+import { calculatePatches, summarizePatches } from "./diff";
 
 type ShadowingConfig = {
   /**
@@ -61,64 +57,25 @@ type ShadowingConfig = {
   tags?: Record<string, string>;
 };
 
-// https://datatracker.ietf.org/doc/html/rfc6902#section-3
-// Omitted `test` since that's not in our use-case
-type JsonPatch =
-  | {
-      op: "remove";
-      path: string;
-    }
-  | {
-      op: "add";
-      path: string;
-      value: /* Json*/ unknown;
-    }
-  | {
-      op: "copy";
-      from: string;
-      path: string;
-    }
-  | {
-      op: "move";
-      from: string;
-      path: string;
-    }
-  | {
-      op: "replace";
-      path: string;
-      value: /* Json */ unknown;
+const getShadowingConfigForUrl = (url: URL): ShadowingConfig | undefined => {
+  // We don't need to check `url.hostname` as your Worker's `routes` configuration
+  // performs precursory filtering
+
+  if (url.pathname === "/jaja/a.json") {
+    return {
+      url: "https://bwatkins.dev/jaja/b.json",
+      percentSampleRate: 100,
+      timeout: 5,
+      tags: {
+        // you can use whatever logic works for your use-case here!
+        env: url.hostname === "bwatkins.dev" ? "production" : "develop",
+        app: "jaja",
+      },
     };
+  }
 
-const diffFormatters = diffFormattersIgnore as typeof diffFormattersIgnore & {
-  jsonpatch: {
-    // `Delta` is an `any` typed record so i'm
-    // essentially only getting a participating trophy here
-    format: (delta: Delta) => JsonPatch[];
-  };
+  return undefined;
 };
-const diff = create({
-  // `jsondiffpatch` first tries a `===` so primitives shouldn't pass through here
-  // `{}` of varying depths seem ok
-  // `[]`/tuples of varying depths seem ok
-  objectHash: (obj: Record<string, unknown>) => {
-    // JSON.stringify: this isn't a great idea.
-    // while we can detect simple moves with this
-    // it won't differentiate semantic moves
-
-    // ideas:
-    // - recursively call `jsondiffpatch`?
-    //   - not particularly difficult to do some denial of service
-    //   - oh. smooth brain. we don't have the other object to diff with.
-    // - create a hash of the keys + values?
-    //   - let's roll with this
-
-    // it's not a hash.
-    // but it is deterministic! :)
-    return Object.entries(obj)
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .join(",");
-  },
-});
 
 const getResponseBody = (res: Response) => {
   const type = res.headers.get("content-type") ?? "";
@@ -129,18 +86,6 @@ const getResponseBody = (res: Response) => {
   } else {
     return res.text();
   }
-};
-
-const getClient = async (env: Env) => {
-  const url = new URL(env.DATABASE_CONNECTION_STRING);
-  console.log("Connecting to database", {
-    connectionString: url.toString().replace(url.password, "******"),
-  });
-  const client = new Client({
-    connectionString: url.toString(),
-  });
-  await client.connect();
-  return client;
 };
 
 const triggerAndProcessShadow = async (
@@ -203,23 +148,8 @@ const triggerAndProcessShadow = async (
   const a = await getResponseBody(control);
   const b = await getResponseBody(shadowed);
 
-  const delta = diff.diff(a, b) ?? {};
-  const patches = diffFormatters.jsonpatch.format(delta);
-
-  const summary = patches.reduce(
-    (summary, patch) => {
-      if (patch.op === "add") {
-        summary.added += 1;
-      } else if (patch.op === "remove") {
-        summary.removed += 1;
-      } else if (patch.op === "replace") {
-        summary.added += 1;
-        summary.removed += 1;
-      }
-      return summary;
-    },
-    { added: 0, removed: 0 },
-  );
+  const patches = calculatePatches(a, b);
+  const patchesSummary = summarizePatches(patches);
 
   console.log("Generating encryption key");
   const cryptoKey = await generateKey(env.ENCRYPTION_SECRET);
@@ -227,7 +157,7 @@ const triggerAndProcessShadow = async (
   console.log("Trying to save");
 
   const databaseClientStart = Date.now();
-  const client = await getClient(env);
+  const client = await getDatabaseClient(env.DATABASE_CONNECTION_STRING);
   console.log("Opened database connection", {
     duration: Date.now() - databaseClientStart,
   });
@@ -266,8 +196,8 @@ const triggerAndProcessShadow = async (
       parentId,
       JSON.stringify(config.tags),
       patches.length > 0 ? patches.map((p) => p.path) : null,
-      summary.added || null,
-      summary.removed || null,
+      patchesSummary.added || null,
+      patchesSummary.removed || null,
       JSON.stringify(await encrypt(JSON.stringify(patches), cryptoKey)),
       control.url,
       request.method.toLowerCase(),
@@ -306,27 +236,6 @@ const triggerAndProcessShadow = async (
   console.log("Closed database connection", {
     duration: Date.now() - databaseCloseStart,
   });
-};
-
-const getShadowingConfigForUrl = (url: URL): ShadowingConfig | undefined => {
-  // We don't need to check `url.hostname` as your Worker's `routes` configuration
-  // performs precursory filtering
-
-  if (url.pathname === "/jaja/a.json") {
-    return {
-      url: "https://bwatkins.dev/jaja/b.json",
-      percentSampleRate: 100,
-      timeout: 5,
-      tags: {
-        // contrived example though imagine you have `bwatkins.dev` and `api.develop.internal.bwatkins.dev`
-        // you can whatever logic works for your use-case here!
-        env: url.hostname === "bwatkins.dev" ? "production" : "develop",
-        app: "jaja",
-      },
-    };
-  }
-
-  return undefined;
 };
 
 export default {
