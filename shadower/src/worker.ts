@@ -1,10 +1,6 @@
-import {
-  Delta,
-  create,
-  formatters as diffFormattersIgnore,
-} from "jsondiffpatch";
 import { encrypt, generateKey } from "@local/encryption";
 import { getDatabaseClient } from "./repository/database";
+import { calculatePatches, summarizePatches } from "./diff";
 
 type ShadowingConfig = {
   /**
@@ -60,65 +56,6 @@ type ShadowingConfig = {
    */
   tags?: Record<string, string>;
 };
-
-// https://datatracker.ietf.org/doc/html/rfc6902#section-3
-// Omitted `test` since that's not in our use-case
-type JsonPatch =
-  | {
-      op: "remove";
-      path: string;
-    }
-  | {
-      op: "add";
-      path: string;
-      value: /* Json*/ unknown;
-    }
-  | {
-      op: "copy";
-      from: string;
-      path: string;
-    }
-  | {
-      op: "move";
-      from: string;
-      path: string;
-    }
-  | {
-      op: "replace";
-      path: string;
-      value: /* Json */ unknown;
-    };
-
-const diffFormatters = diffFormattersIgnore as typeof diffFormattersIgnore & {
-  jsonpatch: {
-    // `Delta` is an `any` typed record so i'm
-    // essentially only getting a participating trophy here
-    format: (delta: Delta) => JsonPatch[];
-  };
-};
-const diff = create({
-  // `jsondiffpatch` first tries a `===` so primitives shouldn't pass through here
-  // `{}` of varying depths seem ok
-  // `[]`/tuples of varying depths seem ok
-  objectHash: (obj: Record<string, unknown>) => {
-    // JSON.stringify: this isn't a great idea.
-    // while we can detect simple moves with this
-    // it won't differentiate semantic moves
-
-    // ideas:
-    // - recursively call `jsondiffpatch`?
-    //   - not particularly difficult to do some denial of service
-    //   - oh. smooth brain. we don't have the other object to diff with.
-    // - create a hash of the keys + values?
-    //   - let's roll with this
-
-    // it's not a hash.
-    // but it is deterministic! :)
-    return Object.entries(obj)
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .join(",");
-  },
-});
 
 const getResponseBody = (res: Response) => {
   const type = res.headers.get("content-type") ?? "";
@@ -191,23 +128,8 @@ const triggerAndProcessShadow = async (
   const a = await getResponseBody(control);
   const b = await getResponseBody(shadowed);
 
-  const delta = diff.diff(a, b) ?? {};
-  const patches = diffFormatters.jsonpatch.format(delta);
-
-  const summary = patches.reduce(
-    (summary, patch) => {
-      if (patch.op === "add") {
-        summary.added += 1;
-      } else if (patch.op === "remove") {
-        summary.removed += 1;
-      } else if (patch.op === "replace") {
-        summary.added += 1;
-        summary.removed += 1;
-      }
-      return summary;
-    },
-    { added: 0, removed: 0 },
-  );
+  const patches = calculatePatches(a, b);
+  const patchesSummary = summarizePatches(patches);
 
   console.log("Generating encryption key");
   const cryptoKey = await generateKey(env.ENCRYPTION_SECRET);
@@ -254,8 +176,8 @@ const triggerAndProcessShadow = async (
       parentId,
       JSON.stringify(config.tags),
       patches.length > 0 ? patches.map((p) => p.path) : null,
-      summary.added || null,
-      summary.removed || null,
+      patchesSummary.added || null,
+      patchesSummary.removed || null,
       JSON.stringify(await encrypt(JSON.stringify(patches), cryptoKey)),
       control.url,
       request.method.toLowerCase(),
